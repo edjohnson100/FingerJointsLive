@@ -1,22 +1,45 @@
 # Finger Joints Live
 
-This add-in for Autodesk Fusion 360 can create a finger joint (box joint) from the overlap of two objects. Although, not specifically designed for this, the add-in also works for lap joints and can cut pieces into slices.
+This is a live palette remix of the original Finger Joints add-in created by Florian Pommerening. You can find his original repository here: [FlorianPommerening/FingerJoints](https://github.com/FlorianPommerening/FingerJoints).
+
+This add-in for Autodesk Fusion can create a finger joint (box joint) from the overlap of two objects. Although, not specifically designed for this, the add-in also works for lap joints and can cut pieces into slices.
 
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ## Installation
 
-Download the [latest version of the plugin](https://github.com/FlorianPommerening/FingerJoints/archive/master.zip), unpack it to your add-ins directory (see below) and remove the "-master" from the name. To start the add-in inside Fusion use the "ADD-INS" button in the "TOOLS" ribbon, then find the add-in in the "Add-Ins" tab, select it and click "Run".
+### Manual Installation Options
 
-Add-ins directory
+This script requires a quick manual installation. You can choose to install it in Fusion's default scripts directory or a custom folder of your choice.
 
-* Windows:  `%AppData%\Autodesk\Autodesk Fusion 360\API\AddIns`
-* Mac OS X:  `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns`  
-  or ` ~/Library/Containers/com.autodesk.mas.fusion360/Data/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns`
+#### Option 1: Install in the Default Fusion Directory
+1. **Download:** Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
+2. **Move the Folder:** Move the entire `FingerJointsLive` folder into your native Fusion Scripts directory:
+   * **Windows:** `%appdata%\Autodesk\Autodesk Fusion 360\API\Addins`
+   * **Mac:** `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Addins`
+3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
+4. **Run the Script:** Make sure the **Add-ins** filter checkbox is checked. You should see **LiveUtilities** in the list of add-ins. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
-There are also [more detailed installation instructions](https://tapnair.github.io/installation.html) by Patrick Rainsberry.
+#### Option 2: Install in a Custom Directory
+1. **Download:**Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
+2. **Organize:** Create a dedicated folder on your computer for your Fusion tools (e.g., `Documents\Fusion_Tools`) and move the `FingerJointsLive` folder inside it.
+3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
+4. **Add the Add-in:** Click the grey **"+"** icon next to the search box at the top of the dialog and select **Script or add-in from device**.
+5. **Locate:** Navigate to your custom folder, select the `FingerJointsLive` folder, and click **Select Folder**.
+6. **Run the Add-in:** Make sure the **Add-ins** filter checkbox is checked. You should now see **FingerJointsLive** listed. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
-## Usage
+## ✨ What's New in FingerJointsLive (The Remix)
+
+This "Live" version takes the core mathematical engine of Florian's original add-in and wraps it in a modern, modeless HTML palette with several workflow enhancements:
+
+* **Persistent Live UI:** The palette docks on the side of your screen. You can tweak parameters, change settings, and see results without a modal dialog blocking your view or closing after every tweak.
+* **Multi-Body Selection:** You are no longer limited to joining just two bodies at a time! You can now select multiple "First Bodies" (e.g., two opposite walls of a box) and multiple "Second Bodies" (the adjoining walls). The add-in will calculate the intersections and generate the joints for all of them at once.
+* **Non-Destructive Live Preview:** Instead of computing heavy timeline features to show a preview, FingerJointsLive renders temporary "ghost" bodies on the canvas. This keeps your timeline clean and makes tweaking dimensions lightning-fast. Once you are happy with the preview, hit "Generate Finger Joints" to commit the changes to the timeline in a single undo step.
+* **Preset Saving:** Save your favorite joint configurations as named presets directly in the palette.
+
+## Original Usage Guide (For Reference)
+
+*Note: The following documentation and images are from Florian's original add-in. The core concepts, mathematical principles, and terminology (like Dynamic Sizing, Placement Types, etc.) still apply perfectly to this Live remix. I will be updating this section with new screenshots specific to the new UI in the future.*
 
 ![Finger joint](resources/doc/demo.png)
 
@@ -79,30 +102,14 @@ copy and the original. This will slice the body along your chosen axis.
 
 ## Issues
 
-If you find any issues with the add-in, please report them on [Github][issuetracker]
+If you find any issues with this remixed add-in, please report them on this project's GitHub issue tracker.
 
 ## Contributing
 
-If you have ideas how to improve the add-in, you can create an issue on [Github][issuetracker]. Since I am working on this in my free time I cannot promise I will get to it, though. Pull requests for fixes and new features are very welcome.
+Pull requests for fixes and new features are very welcome.
 
-The add-in is currently not parametric, so updating the underlying geometry will not update the placement or size of the fingers. I'm not sure this is possible with the current API (there is a [related request on the Fusion 360 IdeaStation][ideastation] and an [extension to the API][customfeatures] currently in preview mode). If you have an idea of how to implement this, please get in touch. Custom features 
-
-I am not an artist, so the icons are still [Programmer art](https://en.wikipedia.org/wiki/Programmer_art). I'd be happy to replace them with something closer to the style of the built-in commands. If you want to help with that, get in touch.
-
-If you find this add-in useful, I would like to hear from you and see pictures of what you created with it. If you want, you can also buy me a coffee by clicking on the link below.
-
-[![buy me a coffee][bmcbutton]](https://www.buymeacoffee.com/flogo)
+The add-in is currently not fully parametric in the timeline, but this live palette version aims to provide a much more interactive experience.
 
 ## License
 
-[![Creative Commons License][by-nc-sa-logo]][by-nc-sa-link]
-
-This add-in is licensed under a [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License][by-nc-sa-link]. If you are interested in using the add-in under different terms, contact florian.pommerening@unibas.ch.
-
-
-[by-nc-sa-logo]: https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png
-[by-nc-sa-link]: http://creativecommons.org/licenses/by-nc-sa/4.0/
-[issuetracker]: https://github.com/FlorianPommerening/FingerJoints/issues
-[ideastation]: https://forums.autodesk.com/t5/fusion-360-ideastation/allow-add-ins-to-be-fully-parametric-and-represented-in-the/idi-p/8660436
-[customfeatures]: http://help.autodesk.com/view/fusion360/ENU/?guid=GUID-FA7EF128-1DE0-4115-89A3-795551E2DEF2
-[bmcbutton]: https://cdn.buymeacoffee.com/buttons/default-blue.png
+This add-in is based on the original work by Florian Pommerening which is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
