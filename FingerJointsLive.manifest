@@ -1,0 +1,14 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "addin",
+    "id": "5098e916-4767-4286-905c-354972e36746", 
+    "author": "Ed Johnson",
+    "description": {
+        "": "An updated, palette-based UI, add-in for creating finger joints (box joints) from the overlap of two bodies. Based on the original add-in created by Florian Pommerening."},
+    "version": "1.0.0",
+    "runOnStartup": true,
+    "supportedOS": "windows|mac",
+    "editEnabled": true,
+    "iconFilename": "FingerJointsLiveAppIcon.png"
+
+}

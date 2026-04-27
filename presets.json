@@ -1,0 +1,50 @@
+{
+    "20mm EQ FingersOut": {
+        "placementType": "fingers outside",
+        "dynamicSizeType": "equal notch and finger size",
+        "isNumberOfFingersFixed": false,
+        "fixedNumFingers": "3",
+        "fixedNotchSize": "20 mm",
+        "fixedFingerSize": "20 mm",
+        "minNotchSize": "20 mm",
+        "minFingerSize": "20 mm",
+        "gap": "0 mm",
+        "gapToPart": "0 mm"
+    },
+    "20mm EQ NotchesOut": {
+        "placementType": "notches outside",
+        "dynamicSizeType": "equal notch and finger size",
+        "isNumberOfFingersFixed": false,
+        "fixedNumFingers": "3",
+        "fixedNotchSize": "20 mm",
+        "fixedFingerSize": "20 mm",
+        "minNotchSize": "20 mm",
+        "minFingerSize": "20 mm",
+        "gap": "0 mm",
+        "gapToPart": "0 mm"
+    },
+    "40mm EQ NotchesOut": {
+        "placementType": "notches outside",
+        "dynamicSizeType": "equal notch and finger size",
+        "isNumberOfFingersFixed": false,
+        "fixedNumFingers": "3",
+        "fixedNotchSize": "20 mm",
+        "fixedFingerSize": "20 mm",
+        "minNotchSize": "20 mm",
+        "minFingerSize": "40",
+        "gap": "0 mm",
+        "gapToPart": "0 mm"
+    },
+    "20mm EQ FingerFirst": {
+        "placementType": "same number of fingers and notches (start with finger)",
+        "dynamicSizeType": "equal notch and finger size",
+        "isNumberOfFingersFixed": false,
+        "fixedNumFingers": "3",
+        "fixedNotchSize": "20 mm",
+        "fixedFingerSize": "20 mm",
+        "minNotchSize": "20 mm",
+        "minFingerSize": "20",
+        "gap": "0 mm",
+        "gapToPart": "0 mm"
+    }
+}

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script>
+        // Cache-buster for CSS in Fusion 360 CEF to ensure styling updates reliably
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'style.css?t=' + new Date().getTime();
+        document.head.appendChild(link);
+    </script>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h2>Finger Joints Live</h2>
+            <div class="sub-header">Generate joints dynamically</div>
+        </div>
+        <select id="themeSelect" onchange="changeTheme()" style="width: auto; height: 28px; font-size: 11px; padding: 2px 5px;">
+            <option value="default">Default Light</option>
+            <!-- Options injected dynamically from style.css -->
+        </select>
+    </div>
+    
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-selections', event)">Joints</button>
+        <button class="tab-btn" onclick="switchTab('tab-settings', event)">Themes</button>
+    </div>
+
+    <!-- TAB 1: JOINT SETUP -->
+    <div id="tab-selections" class="tab-content active">
+        
+        <div class="controls-bar" style="justify-content: flex-end; margin-bottom: 5px;">
+            <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="showHelp()" title="Show Quick Help">Help</button>
+            <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="sendAction('clear_selections')" title="Clear selected bodies">Clear Picks</button>
+        </div>
+        
+        <div class="data-container" style="margin-bottom: 15px;">
+            <button id="btn-body0" class="btn-secondary" onclick="sendAction('select_body0')">Select 1st Body/Bodies (0)</button>
+            <button id="btn-body1" class="btn-secondary" onclick="sendAction('select_body1')">Select 2nd Body/Bodies (0)</button>
+            <button id="btn-dir" class="btn-secondary" onclick="sendAction('select_direction')">Select Direction (Auto)</button>
+        </div>
+        
+        <div class="controls-bar">
+            <div class="search-container">
+                <select id="presetSelect" onchange="loadPreset()">
+                    <option value="">-- Presets --</option>
+                </select>
+            </div>
+            <button class="icon-btn" onclick="savePreset()" title="Save current settings as preset">Save</button>
+            <button class="icon-btn del-btn" onclick="deletePreset()" title="Delete selected preset">X</button>
+            <button class="icon-btn" onclick="resetDefaults()" title="Reset all settings to defaults">Clear</button>
+        </div>
+
+        <div class="section">
+            <div class="section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <h3>Configuration</h3>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="section-content data-container">
+                <div class="data-row">
+                    <div class="row-label" title="Placement Type">Placement</div>
+                    <div class="row-controls">
+                        <select id="placementType" onchange="autoPreview()" style="width: 130px;">
+                            <option value="fingers outside">Fingers outside</option>
+                            <option value="notches outside">Notches outside</option>
+                            <option value="same number of fingers and notches (start with finger)">Start w/ finger</option>
+                            <option value="same number of fingers and notches (start with notch)">Start w/ notch</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label" title="Size Distribution">Size Mode</div>
+                    <div class="row-controls">
+                        <select id="dynamicSizeType" onchange="updateVisibility(); autoPreview()" style="width: 130px;">
+                            <option value="equal notch and finger size">Equal Size</option>
+                            <option value="fixed notch size">Fixed Notch</option>
+                            <option value="fixed finger size">Fixed Finger</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label">Fixed Number of Fingers</div>
+                    <div class="row-controls">
+                        <input type="checkbox" id="isNumberOfFingersFixed" onchange="updateVisibility(); autoPreview()" style="width: auto;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-fixedNumFingers">
+                    <div class="row-label">Number of Fingers</div>
+                    <div class="row-controls">
+                        <input type="number" id="fixedNumFingers" value="3" min="1" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-fixedNotchSize">
+                    <div class="row-label">Notch Size</div>
+                    <div class="row-controls">
+                        <input type="text" id="fixedNotchSize" value="20 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-fixedFingerSize">
+                    <div class="row-label">Finger Size</div>
+                    <div class="row-controls">
+                        <input type="text" id="fixedFingerSize" value="20 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-minNotchSize">
+                    <div class="row-label">Minimal Notch Size</div>
+                    <div class="row-controls">
+                        <input type="text" id="minNotchSize" value="20 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-minFingerSize">
+                    <div class="row-label">Minimal Finger Size</div>
+                    <div class="row-controls">
+                        <input type="text" id="minFingerSize" value="20 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label">Gap Between Fingers</div>
+                    <div class="row-controls">
+                        <input type="text" id="gap" value="0 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label" title="Experimental">Gap To Part (Exp.)</div>
+                    <div class="row-controls">
+                        <input type="text" id="gapToPart" value="0 mm" oninput="autoPreview()" style="width: 80px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-group" style="margin-top: 15px;">
+            <button class="btn-secondary" onclick="previewJoints()">Preview</button>
+            <button class="btn-primary" onclick="generateJoints()">Generate Joints</button>
+        </div>
+    </div>
+    
+    <!-- TAB 2: THEME MANAGER -->
+    <div id="tab-settings" class="tab-content">
+        <div class="section">
+            <div class="section-header">
+                <h3>Theme Manager</h3>
+            </div>
+            <div class="section-content data-container">
+                <p style="font-size: 12px; margin-top: 0; color: var(--text-sub);">Import custom themes exported from Theme Designer, or export your current active theme.</p>
+                <div class="create-grid">
+                    <button class="btn-primary" onclick="requestImport('css')">📥 Import style.css</button>
+                    <button class="btn-primary" onclick="requestExport('css')">📤 Export style.css</button>
+                    <button class="btn-secondary" onclick="requestImport('json')">📂 Import .json</button>
+                    <button class="btn-secondary" onclick="requestExport('json')">💾 Export .json</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Help Modal -->
+    <div id="helpModal" class="modal-overlay" onclick="hideHelp(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3>Quick Help</h3>
+            <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: 13px;">
+                <ul style="padding-left: 20px; margin: 0;">
+                    <li style="margin-bottom: 8px;"><strong>1st Body/Bodies:</strong> Select one or multiple bodies where the <em>fingers</em> will be placed.</li>
+                    <li style="margin-bottom: 8px;"><strong>2nd Body/Bodies:</strong> Select one or multiple bodies where the <em>notches</em> will be placed.</li>
+                    <li style="margin-bottom: 8px;"><strong>Direction:</strong> Select an edge to define the joint's orientation. Leave this empty to automatically use the longest overlapping edge.</li>
+                </ul>
+            </div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="modal-btn btn-primary" onclick="hideHelp(event)">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cssVariables = [
+            '--font-family', '--font-size-base',
+            '--bg-body', '--text-main', '--text-sub', '--border-color',
+            '--row-bg', '--row-border', '--row-hover',
+            '--input-bg', '--input-border', '--input-text', '--input-placeholder', '--toggle-bg',
+            '--header-hover', '--tab-bg', '--tab-active-bg', '--tab-text', '--tab-active-text',
+            '--btn-primary', '--btn-primary-hover', '--btn-success', '--btn-success-hover',
+            '--btn-secondary', '--btn-secondary-hover', '--btn-secondary-text',
+            '--status-success-bg', '--status-success-text',
+            '--status-error-bg', '--status-error-text',
+            '--status-info-bg', '--status-info-text'
+        ];
+        let themes = {};
+        let baseCSS = "";
+
+        function parseStyleCSS(cssText) {
+            const themeRegex = /(?:\/\*[\s\S]*?\*\/\s*)?(?:(:root)|\[data-theme=["']?([^"']+)["']?\])\s*\{([^}]+)\}/g;
+            let match;
+            let parsedThemes = {};
+            while ((match = themeRegex.exec(cssText)) !== null) {
+                let themeId = match[1] ? "" : match[2];
+                let content = match[3];
+                let vars = {};
+                // Safely extract variables even if a trailing semicolon is missing
+                const varRegex = /(--[\w-]+)\s*:\s*([^;]+?)(?=\s*;|\s*$)/g;
+                let vMatch;
+                while ((vMatch = varRegex.exec(content)) !== null) {
+                    vars[vMatch[1].trim()] = vMatch[2].trim();
+                }
+                parsedThemes[themeId] = vars;
+            }
+            let cleanCSS = cssText.replace(themeRegex, '').trim();
+            return { themes: parsedThemes, baseCSS: cleanCSS };
+        }
+
+        function generateFullCSS() {
+            let out = "";
+            let i = 1;
+            for (let id in themes) {
+                let comment = id === "" ? "Default Light" : id;
+                let sel = id === "" ? ":root" : `[data-theme="${id}"]`;
+                out += `/* ${i}. ${comment} */\n${sel} {\n`;
+                for (let v of cssVariables) {
+                    if (themes[id][v]) out += `    ${v}: ${themes[id][v]};\n`;
+                }
+                out += `}\n\n`;
+                i++;
+            }
+            return out + baseCSS;
+        }
+
+        function updateThemeDropdown() {
+            const select = document.getElementById('themeSelect');
+            const current = select.value;
+            select.innerHTML = '<option value="default">Default Light</option>';
+            for (let id in themes) {
+                if (id === "") continue;
+                let opt = document.createElement('option');
+                opt.value = id; opt.text = id;
+                select.appendChild(opt);
+            }
+            if (current && [...select.options].some(o => o.value === current)) select.value = current;
+        }
+
+        function updateStyleTag() {
+            let out = "";
+            for (let id in themes) {
+                if (id === "") continue; // Base is handled by style.css natively
+                out += `[data-theme="${id}"] {\n`;
+                for (let v of cssVariables) {
+                    if (themes[id][v]) out += `    ${v}: ${themes[id][v]};\n`;
+                }
+                out += `}\n`;
+            }
+            let styleTag = document.getElementById('dynamic-theme-overrides');
+            if (!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = 'dynamic-theme-overrides';
+                document.head.appendChild(styleTag);
+            }
+            styleTag.innerHTML = out;
+        }
+
+        function requestImport(type) { adsk.fusionSendData('notification', JSON.stringify({ action: 'import_file', file_type: type })); }
+        function requestExport(type) {
+            const id = document.getElementById('themeSelect').value;
+            if (type === 'json' && id === 'default') return alert("Please select a specific custom theme from the dropdown to export as JSON.");
+            const content = type === 'json' ? JSON.stringify({ id: id, vars: themes[id] }, null, 2) : generateFullCSS();
+            const defaultName = type === 'json' ? `${id}.theme.json` : 'style.css';
+            adsk.fusionSendData('notification', JSON.stringify({ action: 'export_file', file_type: type, content: content, default_name: defaultName }));
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'default' || theme === 'light') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        }
+
+        function changeTheme() {
+            const theme = document.getElementById('themeSelect').value;
+            localStorage.setItem('fjl_theme', theme);
+            applyTheme(theme);
+            adsk.fusionSendData('notification', JSON.stringify({ action: 'save_theme', theme: theme }));
+        }
+
+        const savedTheme = localStorage.getItem('fjl_theme') || 'default';
+        document.getElementById('themeSelect').value = savedTheme;
+        applyTheme(savedTheme);
+
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function showHelp() { document.getElementById('helpModal').style.display = 'flex'; }
+        function hideHelp(e) { if(e) e.preventDefault(); document.getElementById('helpModal').style.display = 'none'; }
+
+        function sendAction(actionName) {
+            adsk.fusionSendData('notification', JSON.stringify({ action: actionName }));
+        }
+
+        function toggleRow(id, isVisible) {
+            document.getElementById(id).style.display = isVisible ? 'flex' : 'none';
+        }
+
+        function updateVisibility() {
+            const dynamicSizeType = document.getElementById('dynamicSizeType').value;
+            const isFixedNum = document.getElementById('isNumberOfFingersFixed').checked;
+
+            toggleRow('grp-fixedNumFingers', isFixedNum);
+            toggleRow('grp-fixedNotchSize', dynamicSizeType === 'fixed notch size');
+            toggleRow('grp-fixedFingerSize', dynamicSizeType === 'fixed finger size');
+            toggleRow('grp-minNotchSize', !isFixedNum && dynamicSizeType === 'fixed finger size');
+            toggleRow('grp-minFingerSize', !isFixedNum && dynamicSizeType !== 'fixed finger size');
+        }
+
+        function getPayload() {
+            return {
+                placementType: document.getElementById('placementType').value,
+                dynamicSizeType: document.getElementById('dynamicSizeType').value,
+                isNumberOfFingersFixed: document.getElementById('isNumberOfFingersFixed').checked,
+                fixedNumFingers: document.getElementById('fixedNumFingers').value,
+                fixedNotchSize: document.getElementById('fixedNotchSize').value,
+                fixedFingerSize: document.getElementById('fixedFingerSize').value,
+                minNotchSize: document.getElementById('minNotchSize').value,
+                minFingerSize: document.getElementById('minFingerSize').value,
+                gap: document.getElementById('gap').value,
+                gapToPart: document.getElementById('gapToPart').value
+            };
+        }
+
+        function generateJoints() {
+            adsk.fusionSendData('notification', JSON.stringify({ action: 'generate', payload: getPayload() }));
+        }
+
+        function previewJoints() {
+            adsk.fusionSendData('notification', JSON.stringify({ action: 'preview', payload: getPayload() }));
+        }
+
+        function autoPreview() {
+            const hasBody0 = document.getElementById('btn-body0').classList.contains('active');
+            const hasBody1 = document.getElementById('btn-body1').classList.contains('active');
+            if (hasBody0 && hasBody1) {
+                previewJoints();
+            }
+        }
+
+        function savePreset() {
+            const name = prompt("Enter a name for this preset:");
+            if (name) {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'save_preset', name: name, payload: getPayload() }));
+            }
+        }
+
+        function loadPreset() {
+            const name = document.getElementById('presetSelect').value;
+            if (name) {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'load_preset', name: name }));
+            }
+        }
+
+        function deletePreset() {
+            const name = document.getElementById('presetSelect').value;
+            if (name && confirm(`Are you sure you want to delete the preset "${name}"?`)) {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'delete_preset', name: name }));
+            }
+        }
+
+        function resetDefaults() {
+            if (confirm("Reset all settings to default?")) {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'reset_defaults' }));
+            }
+        }
+
+        // Handle incoming messages from Python (Updates selection counts)
+        function updateSelBtn(id, text, isActive) {
+            const btn = document.getElementById(id);
+            btn.innerText = text;
+            if (isActive) {
+                btn.classList.add('btn-primary');
+                btn.classList.remove('btn-secondary');
+            } else {
+                btn.classList.add('btn-secondary');
+                btn.classList.remove('btn-primary');
+            }
+        }
+
+        window.fusionJavaScriptHandler = {
+            handle: function(action, data) {
+                try {
+                    if (action === 'selection_updated') {
+                        const info = JSON.parse(data);
+                        if (info.target === 'body0') {
+                            updateSelBtn('btn-body0', `Select 1st Body/Bodies (${info.count})`, info.count > 0);
+                        } else if (info.target === 'body1') {
+                            updateSelBtn('btn-body1', `Select 2nd Body/Bodies (${info.count})`, info.count > 0);
+                        } else if (info.target === 'direction') {
+                            updateSelBtn('btn-dir', info.count ? 'Direction (Selected)' : 'Select Direction (Auto)', info.count > 0);
+                        }
+                        autoPreview();
+                    } else if (action === 'file_imported') {
+                        const payload = JSON.parse(data);
+                        if (payload.file_type === 'css') {
+                            const parsed = parseStyleCSS(payload.content);
+                            themes = parsed.themes; baseCSS = parsed.baseCSS;
+                            updateThemeDropdown(); updateStyleTag();
+                        } else if (payload.file_type === 'json') {
+                            try {
+                                const themeData = JSON.parse(payload.content);
+                                if (themeData.vars && themeData.id !== undefined) {
+                                    themes[themeData.id] = themeData.vars;
+                                    updateThemeDropdown(); updateStyleTag();
+                                    document.getElementById('themeSelect').value = themeData.id;
+                                    changeTheme();
+                                }
+                            } catch(e) { alert("Invalid JSON theme format."); }
+                        }
+                    } else if (action === 'load_defaults') {
+                        const defaults = JSON.parse(data);
+                        if (defaults.style_css) {
+                            const parsed = parseStyleCSS(defaults.style_css);
+                            themes = parsed.themes; baseCSS = parsed.baseCSS;
+                            updateThemeDropdown();
+                        }
+                        if (defaults.placementType) document.getElementById('placementType').value = defaults.placementType;
+                        if (defaults.dynamicSizeType) document.getElementById('dynamicSizeType').value = defaults.dynamicSizeType;
+                        if (defaults.isNumberOfFingersFixed !== undefined) document.getElementById('isNumberOfFingersFixed').checked = defaults.isNumberOfFingersFixed;
+                        if (defaults.fixedNumFingers) document.getElementById('fixedNumFingers').value = defaults.fixedNumFingers;
+                        if (defaults.fixedNotchSize) document.getElementById('fixedNotchSize').value = defaults.fixedNotchSize;
+                        if (defaults.fixedFingerSize) document.getElementById('fixedFingerSize').value = defaults.fixedFingerSize;
+                        if (defaults.minNotchSize) document.getElementById('minNotchSize').value = defaults.minNotchSize;
+                        if (defaults.minFingerSize) document.getElementById('minFingerSize').value = defaults.minFingerSize;
+                        if (defaults.gap) document.getElementById('gap').value = defaults.gap;
+                        if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
+                        if (defaults.theme) {
+                            document.getElementById('themeSelect').value = defaults.theme;
+                            applyTheme(defaults.theme);
+                            localStorage.setItem('fjl_theme', defaults.theme);
+                        }
+                        
+                        if (defaults.presets) {
+                            const select = document.getElementById('presetSelect');
+                            select.innerHTML = '<option value="">-- Presets --</option>';
+                            defaults.presets.forEach(p => {
+                                const opt = document.createElement('option');
+                                opt.value = p; opt.innerText = p;
+                                select.appendChild(opt);
+                            });
+                            if (defaults.selectedPreset) select.value = defaults.selectedPreset;
+                        }
+                        updateVisibility();
+                        autoPreview();
+                    } else if (action === 'update_presets') {
+                        const dataObj = JSON.parse(data);
+                        const select = document.getElementById('presetSelect');
+                        select.innerHTML = '<option value="">-- Presets --</option>';
+                        dataObj.presets.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p; opt.innerText = p;
+                            select.appendChild(opt);
+                        });
+                        if (dataObj.selected) select.value = dataObj.selected;
+                    }
+                } catch (e) { console.log(e); }
+                return 'OK';
+            }
+        };
+
+        // Initialize UI
+        updateVisibility();
+
+        // Wait slightly to guarantee Fusion's CEF binding is active before requesting data
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'html_loaded' }));
+            }, 150);
+        });
+    </script>
+</body>
+</html>
