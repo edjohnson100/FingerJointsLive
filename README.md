@@ -18,10 +18,10 @@ This script requires a quick manual installation. You can choose to install it i
    * **Windows:** `%appdata%\Autodesk\Autodesk Fusion 360\API\Addins`
    * **Mac:** `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Addins`
 3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
-4. **Run the Script:** Make sure the **Add-ins** filter checkbox is checked. You should see **LiveUtilities** in the list of add-ins. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
+4. **Run the Script:** Make sure the **Add-ins** filter checkbox is checked. You should see **FingerJointsLive** in the list of add-ins. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
 #### Option 2: Install in a Custom Directory
-1. **Download:**Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
+1. **Download:** Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
 2. **Organize:** Create a dedicated folder on your computer for your Fusion tools (e.g., `Documents\Fusion_Tools`) and move the `FingerJointsLive` folder inside it.
 3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
 4. **Add the Add-in:** Click the grey **"+"** icon next to the search box at the top of the dialog and select **Script or add-in from device**.
