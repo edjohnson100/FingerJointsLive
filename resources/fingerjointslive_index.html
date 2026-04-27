@@ -151,12 +151,31 @@
                 <h3>Theme Manager</h3>
             </div>
             <div class="section-content data-container">
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: calc(var(--font-size-base) - 2px); font-weight: bold; color: var(--text-sub);">Font Family</label>
+                        <select id="fontFamilySelector" onchange="updateActiveThemeProperty('--font-family', this.value)" style="margin-top: 3px;">
+                            <option value="'Segoe UI', Tahoma, sans-serif">Sans-serif</option>
+                            <option value="Georgia, 'Times New Roman', Times, serif">Serif</option>
+                            <option value="'Consolas', 'Courier New', monospace">Monospace</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: calc(var(--font-size-base) - 2px); font-weight: bold; color: var(--text-sub);">Base Font Size</label>
+                        <select id="fontSizeSelector" onchange="updateActiveThemeProperty('--font-size-base', this.value)" style="margin-top: 3px;">
+                            <option value="11px">11px</option><option value="12px">12px</option><option value="13px">13px</option>
+                            <option value="14px">14px</option><option value="15px">15px</option><option value="16px">16px</option>
+                            <option value="17px">17px</option><option value="18px">18px</option>
+                        </select>
+                    </div>
+                </div>
                 <p style="font-size: 12px; margin-top: 0; color: var(--text-sub);">Import custom themes exported from Theme Designer, or export your current active theme.</p>
                 <div class="create-grid">
                     <button class="btn-primary" onclick="requestImport('css')">📥 Import style.css</button>
                     <button class="btn-primary" onclick="requestExport('css')">📤 Export style.css</button>
                     <button class="btn-secondary" onclick="requestImport('json')">📂 Import .json</button>
                     <button class="btn-secondary" onclick="requestExport('json')">💾 Export .json</button>
+                    <button class="btn-secondary full-width" onclick="resetThemeCache()" style="color: #d9534f; border-color: #d9534f;">🗑️ Factory Reset Theme Cache</button>
                 </div>
             </div>
         </div>
@@ -194,6 +213,7 @@
         ];
         let themes = {};
         let baseCSS = "";
+        let customThemes = JSON.parse(localStorage.getItem('fjl_custom_themes') || '{}');
 
         function parseStyleCSS(cssText) {
             const themeRegex = /(?:\/\*[\s\S]*?\*\/\s*)?(?:(:root)|\[data-theme=["']?([^"']+)["']?\])\s*\{([^}]+)\}/g;
@@ -246,11 +266,11 @@
 
         function updateStyleTag() {
             let out = "";
-            for (let id in themes) {
-                if (id === "") continue; // Base is handled by style.css natively
-                out += `[data-theme="${id}"] {\n`;
+            for (let id in customThemes) {
+                let sel = id === "default" || id === "light" || id === "" ? ":root" : `[data-theme="${id}"]`;
+                out += `${sel} {\n`;
                 for (let v of cssVariables) {
-                    if (themes[id][v]) out += `    ${v}: ${themes[id][v]};\n`;
+                    if (customThemes[id][v]) out += `    ${v}: ${customThemes[id][v]};\n`;
                 }
                 out += `}\n`;
             }
@@ -261,6 +281,19 @@
                 document.head.appendChild(styleTag);
             }
             styleTag.innerHTML = out;
+        }
+
+        function updateActiveThemeProperty(prop, value) {
+            const themeSelector = document.getElementById('themeSelect');
+            const themeId = themeSelector ? themeSelector.value : 'default';
+            
+            if (!customThemes[themeId]) customThemes[themeId] = {};
+            if (!themes[themeId]) themes[themeId] = {};
+            
+            customThemes[themeId][prop] = value;
+            themes[themeId][prop] = value;
+            localStorage.setItem('fjl_custom_themes', JSON.stringify(customThemes));
+            updateStyleTag();
         }
 
         function requestImport(type) { adsk.fusionSendData('notification', JSON.stringify({ action: 'import_file', file_type: type })); }
@@ -284,7 +317,35 @@
             const theme = document.getElementById('themeSelect').value;
             localStorage.setItem('fjl_theme', theme);
             applyTheme(theme);
+            
+            const currentVars = themes[theme] || {};
+            const fontFam = document.getElementById('fontFamilySelector');
+            const fontSize = document.getElementById('fontSizeSelector');
+            if (fontFam && currentVars['--font-family']) {
+                let fam = currentVars['--font-family'].replace(/"/g, "'");
+                let match = Array.from(fontFam.options).find(o => o.value === fam);
+                if (match) fontFam.value = match.value;
+            }
+            if (fontSize && currentVars['--font-size-base']) {
+                let match = Array.from(fontSize.options).find(o => o.value === currentVars['--font-size-base']);
+                if (match) fontSize.value = match.value;
+            }
+
             adsk.fusionSendData('notification', JSON.stringify({ action: 'save_theme', theme: theme }));
+        }
+
+        function resetThemeCache() {
+            if(confirm("This will permanently delete all custom imported themes and font overrides. Continue?")) {
+                localStorage.removeItem('fjl_custom_themes');
+                localStorage.removeItem('fjl_theme');
+                customThemes = {};
+                
+                let styleTag = document.getElementById('dynamic-theme-overrides');
+                if (styleTag) styleTag.remove();
+                
+                document.getElementById('themeSelect').value = 'default';
+                changeTheme();
+            }
         }
 
         const savedTheme = localStorage.getItem('fjl_theme') || 'default';
@@ -343,11 +404,15 @@
             adsk.fusionSendData('notification', JSON.stringify({ action: 'preview', payload: getPayload() }));
         }
 
+        let previewTimeout;
         function autoPreview() {
-            const hasBody0 = document.getElementById('btn-body0').classList.contains('active');
-            const hasBody1 = document.getElementById('btn-body1').classList.contains('active');
+            const hasBody0 = document.getElementById('btn-body0').classList.contains('btn-primary');
+            const hasBody1 = document.getElementById('btn-body1').classList.contains('btn-primary');
             if (hasBody0 && hasBody1) {
-                previewJoints();
+                clearTimeout(previewTimeout);
+                previewTimeout = setTimeout(() => {
+                    previewJoints();
+                }, 500); // 500ms debounce to prevent freezing the Fusion BRep engine
             }
         }
 
@@ -408,13 +473,17 @@
                         const payload = JSON.parse(data);
                         if (payload.file_type === 'css') {
                             const parsed = parseStyleCSS(payload.content);
-                            themes = parsed.themes; baseCSS = parsed.baseCSS;
+                            Object.assign(themes, parsed.themes);
+                            Object.assign(customThemes, parsed.themes);
+                            localStorage.setItem('fjl_custom_themes', JSON.stringify(customThemes));
                             updateThemeDropdown(); updateStyleTag();
                         } else if (payload.file_type === 'json') {
                             try {
                                 const themeData = JSON.parse(payload.content);
                                 if (themeData.vars && themeData.id !== undefined) {
                                     themes[themeData.id] = themeData.vars;
+                                    customThemes[themeData.id] = themeData.vars;
+                                    localStorage.setItem('fjl_custom_themes', JSON.stringify(customThemes));
                                     updateThemeDropdown(); updateStyleTag();
                                     document.getElementById('themeSelect').value = themeData.id;
                                     changeTheme();
@@ -426,7 +495,12 @@
                         if (defaults.style_css) {
                             const parsed = parseStyleCSS(defaults.style_css);
                             themes = parsed.themes; baseCSS = parsed.baseCSS;
+                            for (let id in customThemes) {
+                                if (!themes[id]) themes[id] = {};
+                                Object.assign(themes[id], customThemes[id]);
+                            }
                             updateThemeDropdown();
+                            updateStyleTag();
                         }
                         if (defaults.placementType) document.getElementById('placementType').value = defaults.placementType;
                         if (defaults.dynamicSizeType) document.getElementById('dynamicSizeType').value = defaults.dynamicSizeType;
@@ -440,8 +514,7 @@
                         if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
                         if (defaults.theme) {
                             document.getElementById('themeSelect').value = defaults.theme;
-                            applyTheme(defaults.theme);
-                            localStorage.setItem('fjl_theme', defaults.theme);
+                            changeTheme();
                         }
                         
                         if (defaults.presets) {
