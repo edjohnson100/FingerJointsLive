@@ -6,7 +6,7 @@ This add-in for Autodesk Fusion 360 can create a finger joint (box joint) from t
 
 ## Installation
 
-Download the [latest version of the plugin](https://github.com/FlorianPommerening/FingerJoints/archive/master.zip), unpack it to your add-ins directory (see below) and remove the "-master" from the name. To start the add-in inside Fusion use the "ADD-INS" button in the "TOOLS" ribbon, then find the add-in in the "Add-Ins" tab, select it and click "Run".
+Download the [latest version of the plugin](https://github.com/edjohnson100/FingerJointsLive/archive/refs/heads/main.zip), unpack it to your add-ins directory (see below) and remove the "-master" from the name. To start the add-in inside Fusion use the "ADD-INS" button in the "TOOLS" ribbon, then find the add-in in the "Add-Ins" tab, select it and click "Run".
 
 Add-ins directory
 
