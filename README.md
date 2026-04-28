@@ -2,7 +2,7 @@
 
 This is a live palette remix of the original Finger Joints add-in created by Florian Pommerening. You can find his original repository here: [FlorianPommerening/FingerJoints](https://github.com/FlorianPommerening/FingerJoints).
 
-This add-in for Autodesk Fusion can create a finger joint (box joint) from the overlap of two objects. Although, not specifically designed for this, the add-in also works for lap joints and can cut pieces into slices.
+This "Live" version takes the core mathematical engine of Florian's original add-in and wraps it in a modern, modeless HTML palette with several workflow enhancements.
 
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
@@ -14,6 +14,7 @@ This script requires a quick manual installation. You can choose to install it i
 
 #### Option 1: Install in the Default Fusion Directory
 1. **Download:** Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
+Download the zip file using the green `Code` button above or simply click this link: [Finger Joints Live Main Branch](https://github.com/edjohnson100/FingerJointsLive/archive/refs/heads/main.zip)
 2. **Move the Folder:** Move the entire `FingerJointsLive` folder into your native Fusion Scripts directory:
    * **Windows:** `%appdata%\Autodesk\Autodesk Fusion 360\API\Addins`
    * **Mac:** `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Addins`
@@ -29,8 +30,6 @@ This script requires a quick manual installation. You can choose to install it i
 6. **Run the Add-in:** Make sure the **Add-ins** filter checkbox is checked. You should now see **FingerJointsLive** listed. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
 ## ✨ What's New in FingerJointsLive (The Remix)
-
-This "Live" version takes the core mathematical engine of Florian's original add-in and wraps it in a modern, modeless HTML palette with several workflow enhancements:
 
 * **Persistent Live UI:** The palette docks on the side of your screen. You can tweak parameters, change settings, and see results without a modal dialog blocking your view or closing after every tweak.
 * **Multi-Body Selection:** You are no longer limited to joining just two bodies at a time! You can now select multiple "First Bodies" (e.g., two opposite walls of a box) and multiple "Second Bodies" (the adjoining walls). The add-in will calculate the intersections and generate the joints for all of them at once.
