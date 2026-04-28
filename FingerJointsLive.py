@@ -33,9 +33,6 @@ active_selections = {
     'direction': None
 }
 
-# Global state to hold payload data so the invisible command can execute it
-joint_payload_to_execute = None
-
 PRESETS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'presets.json')
 
 def load_presets_dict():
@@ -65,21 +62,6 @@ def createCutFeature(parentComponent, targetBody, toolBodyFeature):
     cutInput.isNewComponent = False
     return parentComponent.features.combineFeatures.add(cutInput)
 
-# --- HIDDEN COMMAND FOR UNDO GROUPING ---
-class GenerateJointsExecuteHandler(adsk.core.CommandEventHandler):
-    def __init__(self): super().__init__()
-    def notify(self, args):
-        global joint_payload_to_execute
-        if joint_payload_to_execute:
-            execute_joints(joint_payload_to_execute)
-            joint_payload_to_execute = None
-
-class GenerateJointsCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
-    def __init__(self): super().__init__()
-    def notify(self, args):
-        onExecute = GenerateJointsExecuteHandler()
-        args.command.execute.add(onExecute)
-        handlers.append(onExecute)
 
 def clear_preview():
     """Removes any temporary red preview graphics from the canvas."""
@@ -376,11 +358,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     cmd_def.execute()
                 
             elif action == 'generate':
-                global joint_payload_to_execute
-                joint_payload_to_execute = data.get('payload')
-                cmd_def = ui.commandDefinitions.itemById('FJL_Generate_Joints_Cmd')
-                if cmd_def:
-                    cmd_def.execute()
+                execute_joints(data.get('payload'))
                 
             elif action == 'preview':
                 preview_joints(data.get('payload'))
@@ -578,14 +556,6 @@ def run(context):
         cmdDef.commandCreated.add(onCreated)
         handlers.append(onCreated)
         
-        # Pre-register Hidden Generate Command (Wraps action in a single Undo step)
-        gen_cmd = ui.commandDefinitions.itemById('FJL_Generate_Joints_Cmd')
-        if gen_cmd: gen_cmd.deleteMe()
-        gen_cmd = ui.commandDefinitions.addButtonDefinition('FJL_Generate_Joints_Cmd', 'Generate Finger Joints', '')
-        gen_handler = GenerateJointsCommandCreatedHandler()
-        gen_cmd.commandCreated.add(gen_handler)
-        handlers.append(gen_handler)
-        
         # Pre-register Selection Commands
         for target in ['body0', 'body1', 'direction']:
             c_id = f'FJL_Select_{target}'
@@ -608,7 +578,6 @@ def stop(context):
     try:
         if ui.palettes.itemById(palette_id): ui.palettes.itemById(palette_id).deleteMe()
         if ui.commandDefinitions.itemById(command_id): ui.commandDefinitions.itemById(command_id).deleteMe()
-        if ui.commandDefinitions.itemById('FJL_Generate_Joints_Cmd'): ui.commandDefinitions.itemById('FJL_Generate_Joints_Cmd').deleteMe()
         for target in ['body0', 'body1', 'direction']:
             c_id = f'FJL_Select_{target}'
             if ui.commandDefinitions.itemById(c_id): ui.commandDefinitions.itemById(c_id).deleteMe()
