@@ -48,6 +48,7 @@ Output/
 # ----------------------
 Archive/
 presets.json
+defaults.json
 .gitignore
 .npmignore
 .yarnignore

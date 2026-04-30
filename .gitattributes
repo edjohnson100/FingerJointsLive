@@ -5,4 +5,5 @@
 .gitignore export-ignore
 .gitattributes export-ignore
 resources/doc export-ignore
+*.json
 .github export-ignore
