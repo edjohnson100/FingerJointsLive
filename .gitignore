@@ -47,6 +47,10 @@ Output/
 # 6. Other Misc Files
 # ----------------------
 Archive/
+presets.json
+.gitignore
+.npmignore
+.yarnignore
 
 # Affiity Desktop
 *.af
