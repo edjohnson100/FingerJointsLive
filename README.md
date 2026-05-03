@@ -1,10 +1,19 @@
 # Finger Joints Live
 
+**Version:** 1.0.1
+
+**Author:** Ed Johnson (Making With An EdJ)
+
 This is a live palette remix of the original Finger Joints add-in created by Florian Pommerening. You can find his original repository here: [FlorianPommerening/FingerJoints](https://github.com/FlorianPommerening/FingerJoints).
 
 This "Live" version takes the core mathematical engine of Florian's original add-in and wraps it in a modern, modeless HTML palette with several workflow enhancements.
 
 <img src="FingerJointsLiveAppIcon.png" width="300">
+
+---
+## ✨ What's New in v1.0.1
+
+* **Theme accent border:** All built-in and custom themes now render a subtle primary-color border around the palette body for a more polished look. Legacy `style.css` files are automatically upgraded when exported from ThemeDesigner.
 
 ## Installation
 

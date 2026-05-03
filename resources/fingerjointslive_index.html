@@ -2,7 +2,7 @@
 <html>
 <head>
     <script>
-        // Cache-buster for CSS in Fusion 360 CEF to ensure styling updates reliably
+        // Cache-buster for CSS in Fusion CEF to ensure styling updates reliably
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = 'style.css?t=' + new Date().getTime();
@@ -248,7 +248,14 @@
                 out += `}\n\n`;
                 i++;
             }
-            return out + baseCSS;
+            let css = baseCSS;
+            if (css.includes('background-color: var(--bg-body);') && !css.includes('border: 2px solid var(--btn-primary)')) {
+                css = css.replace(
+                    'background-color: var(--bg-body);',
+                    'background-color: var(--bg-body); border: 2px solid var(--btn-primary);'
+                );
+            }
+            return out + css;
         }
 
         function updateThemeDropdown() {
