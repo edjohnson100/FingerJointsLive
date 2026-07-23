@@ -13,8 +13,7 @@ This "Live" version takes the core mathematical engine of Florian's original add
 ---
 ## ✨ What's New in v1.2.0
 
-* **Undo Last Group:** A new "Undo Last Group" button appears after Generate Joints or an Extend Butt Joints loop, letting you remove every feature that operation created in a single click — instead of undoing each feature one at a time.
-* **Extend Loop grouped as one timeline entry:** Running the Close Butt Joint loop multiple times in a row now wraps all of the extensions into a single `CFG_Extend_XXX` timeline group, instead of creating a separate group per extension.
+* **Extend Loop grouped as one timeline entry:** Running the Close Butt Joint loop multiple times in a row now wraps all of the extensions into a single `CFG_Extend_XXX` timeline group in the timeline, instead of creating a separate group per extension — so you can delete the whole operation at once from the timeline if needed. Note: each extension is still its own native Undo step, since Fusion gives every completed selection command its own Ctrl+Z entry.
 * **Reorganized palette layout:** Preview/Generate Joints now sit right below body/direction selection, and the Configuration section sits above Close Butt Joint, so the most-used controls are closer to the top.
 * **Fixed:** Collapsing/expanding a section right before closing the palette could lose that change due to a save-debounce race; section collapse state now saves immediately.
 

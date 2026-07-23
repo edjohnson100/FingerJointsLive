@@ -34,10 +34,6 @@
             <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="sendAction('clear_selections')" title="Clear selected bodies">Clear Picks</button>
         </div>
 
-        <div id="undo-group-bar" style="display:none; margin-bottom: 10px;">
-            <button id="btn-undo-group" class="btn-secondary" style="width: 100%; font-size: 11px;" onclick="sendAction('undo_last_group')" title="Removes every feature created by the last Generate/Extend Loop operation, as one step"></button>
-        </div>
-
         <div class="data-container" style="margin-bottom: 15px;">
             <button id="btn-body0" class="btn-secondary" onclick="sendAction('select_body0')">Select 1st Body/Bodies (0)</button>
             <button id="btn-body1" class="btn-secondary" onclick="sendAction('select_body1')">Select 2nd Body/Bodies (0)</button>
@@ -515,16 +511,6 @@
                             updateSelBtn('btn-dir', info.count ? 'Direction (Selected)' : 'Select Direction (Auto)', info.count > 0);
                         }
                         autoPreview();
-                    } else if (action === 'last_group_updated') {
-                        const info = JSON.parse(data);
-                        const bar = document.getElementById('undo-group-bar');
-                        const btn = document.getElementById('btn-undo-group');
-                        if (info.name) {
-                            btn.innerText = `Undo Last Group (${info.name})`;
-                            bar.style.display = '';
-                        } else {
-                            bar.style.display = 'none';
-                        }
                     } else if (action === 'file_imported') {
                         const payload = JSON.parse(data);
                         if (payload.file_type === 'css') {

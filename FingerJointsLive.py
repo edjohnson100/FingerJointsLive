@@ -40,10 +40,6 @@ active_selections = {
 extend_loop_start_index = None
 extend_loop_chaining = False
 
-# Name of the most recently created CFG_Extend_XXX/CFG_Joint_XXX timeline group, so the palette's
-# "Undo Last Group" button can roll back an entire multi-feature operation in one click.
-last_group_info = None
-
 PRESETS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'presets.json')
 
 def load_presets_dict():
@@ -134,42 +130,13 @@ def extend_face_to_close_butt_joint():
     return True
 
 
-def notify_last_group(name):
-    """Records the given timeline group as the one "Undo Last Group" will remove, and tells the
-    palette so its button can show/label itself."""
-    global last_group_info
-    last_group_info = {'name': name}
-    palette = ui.palettes.itemById(palette_id)
-    if palette:
-        palette.sendInfoToHTML('last_group_updated', json.dumps({'name': name}))
-
-
-def undo_last_group():
-    """Deletes every timeline item belonging to the most recently created CFG_Extend_XXX/CFG_Joint_XXX
-    group, so a multi-feature Extend-Loop or Generate operation can be rolled back in a single click."""
-    global last_group_info
-    info = last_group_info
-    last_group_info = None
-    if info:
-        try:
-            design = app.activeProduct.activeComponent.parentDesign
-            group = design.timeline.timelineGroups.itemByName(info['name'])
-            if group:
-                items = [group.item(i) for i in range(group.count)]
-                for item in reversed(items):
-                    try: item.deleteMe()
-                    except: pass
-        except Exception:
-            if ui: ui.messageBox(f'Could not undo the last group:\n{traceback.format_exc()}')
-    palette = ui.palettes.itemById(palette_id)
-    if palette:
-        palette.sendInfoToHTML('last_group_updated', json.dumps({'name': None}))
-
-
 def close_extend_loop_group():
     """Wraps every feature created since the "Close Butt Joint" loop started (extend_loop_start_index)
     into a single CFG_Extend_XXX timeline group, covering all iterations of the select/select/extend
-    cycle rather than one group per extension. No-ops if the loop never created a feature."""
+    cycle rather than one group per extension. No-ops if the loop never created a feature.
+    This is purely organizational (timeline display) — each extension is still its own native Undo
+    step, since the loop is built from repeated Selection Commands and Fusion gives each completed
+    Command its own Undo entry; there's no public API to merge separate Commands into one Ctrl+Z."""
     global extend_loop_start_index
     start_idx = extend_loop_start_index
     extend_loop_start_index = None
@@ -180,14 +147,21 @@ def close_extend_loop_group():
         end_idx = design.timeline.count - 1
         if end_idx < start_idx:
             return
-        max_num = 0
-        for group in design.timeline.timelineGroups:
-            if group.name.startswith("CFG_Extend_"):
-                try: max_num = max(max_num, int(group.name.split("_")[-1]))
-                except ValueError: pass
-        new_group = design.timeline.timelineGroups.add(start_idx, end_idx)
-        new_group.name = f"CFG_Extend_{max_num + 1:03d}"
-        notify_last_group(new_group.name)
+        # extend_face_to_close_butt_joint() reverts designType to whatever it was before each
+        # extension, so by the time the loop ends we may be back in Direct Design mode, where
+        # timelineGroups.add() fails; force Parametric for the duration of the grouping call.
+        prevType = design.designType
+        design.designType = adsk.fusion.DesignTypes.ParametricDesignType
+        try:
+            max_num = 0
+            for group in design.timeline.timelineGroups:
+                if group.name.startswith("CFG_Extend_"):
+                    try: max_num = max(max_num, int(group.name.split("_")[-1]))
+                    except ValueError: pass
+            new_group = design.timeline.timelineGroups.add(start_idx, end_idx)
+            new_group.name = f"CFG_Extend_{max_num + 1:03d}"
+        finally:
+            design.designType = prevType
     except: pass
 
 
@@ -381,7 +355,6 @@ def execute_joints(payload):
                     try:
                         new_group = design.timeline.timelineGroups.add(first_idx, last_idx)
                         new_group.name = f"CFG_Joint_{max_num + 1:03d}"
-                        notify_last_group(new_group.name)
                     except: pass
                         
             design.designType = prevType
@@ -553,9 +526,6 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 else:
                     ui.messageBox('Selection command "FJL_Select_extendSource" is not registered. '
                                   'Please fully Stop and Run the add-in again (a plain Reload may not re-register new commands).')
-
-            elif action == 'undo_last_group':
-                undo_last_group()
 
             elif action == 'save_settings':
                 prefs = options.FingerJointFeatureInput()
