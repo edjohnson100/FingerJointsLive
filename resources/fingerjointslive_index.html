@@ -51,8 +51,22 @@
             <button class="icon-btn" onclick="resetDefaults()" title="Reset all settings to defaults">Clear</button>
         </div>
 
-        <div class="section">
-            <div class="section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+        <div class="section" id="section-buttjoint">
+            <div class="section-header" onclick="toggleSection(this.parentElement)">
+                <h3>Close Butt Joint</h3>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="section-content data-container">
+                <button class="btn-primary" onclick="sendAction('extend_loop_start')">Extend Butt Joints (Loop)</button>
+                <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
+                    Repeatedly prompts for an edge/corner/face to extend, then the target face to extend to.
+                    Click Cancel on either prompt to stop.
+                </p>
+            </div>
+        </div>
+
+        <div class="section" id="section-config">
+            <div class="section-header" onclick="toggleSection(this.parentElement)">
                 <h3>Configuration</h3>
                 <span class="arrow">▼</span>
             </div>
@@ -388,6 +402,11 @@
             toggleRow('grp-minFingerSize', !isFixedNum && dynamicSizeType !== 'fixed finger size');
         }
 
+        function toggleSection(sectionEl) {
+            sectionEl.classList.toggle('collapsed');
+            saveSettings();
+        }
+
         function getPayload() {
             return {
                 placementType: document.getElementById('placementType').value,
@@ -399,7 +418,11 @@
                 minNotchSize: document.getElementById('minNotchSize').value,
                 minFingerSize: document.getElementById('minFingerSize').value,
                 gap: document.getElementById('gap').value,
-                gapToPart: document.getElementById('gapToPart').value
+                gapToPart: document.getElementById('gapToPart').value,
+                collapsedSections: {
+                    buttjoint: document.getElementById('section-buttjoint').classList.contains('collapsed'),
+                    config: document.getElementById('section-config').classList.contains('collapsed')
+                }
             };
         }
 
@@ -411,8 +434,17 @@
             adsk.fusionSendData('notification', JSON.stringify({ action: 'preview', payload: getPayload() }));
         }
 
+        let saveSettingsTimeout;
+        function saveSettings() {
+            clearTimeout(saveSettingsTimeout);
+            saveSettingsTimeout = setTimeout(() => {
+                adsk.fusionSendData('notification', JSON.stringify({ action: 'save_settings', payload: getPayload() }));
+            }, 500);
+        }
+
         let previewTimeout;
         function autoPreview() {
+            saveSettings();
             const hasBody0 = document.getElementById('btn-body0').classList.contains('btn-primary');
             const hasBody1 = document.getElementById('btn-body1').classList.contains('btn-primary');
             if (hasBody0 && hasBody1) {
@@ -523,7 +555,12 @@
                             document.getElementById('themeSelect').value = defaults.theme;
                             changeTheme();
                         }
-                        
+                        if (defaults.collapsedSections) {
+                            const cs = defaults.collapsedSections;
+                            document.getElementById('section-buttjoint').classList.toggle('collapsed', !!cs.buttjoint);
+                            document.getElementById('section-config').classList.toggle('collapsed', !!cs.config);
+                        }
+
                         if (defaults.presets) {
                             const select = document.getElementById('presetSelect');
                             select.innerHTML = '<option value="">-- Presets --</option>';

@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.0.1
+**Version:** 1.1.0
 
 **Author:** Ed Johnson (Making With An EdJ)
 
@@ -11,6 +11,12 @@ This "Live" version takes the core mathematical engine of Florian's original add
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ---
+## ✨ What's New in v1.1.0
+
+* **Close Butt Joint (Loop):** Bodies no longer need to already overlap. Pick an edge, corner, or face on the panel you want to extend (handy when the true end-cap face is tucked against its neighbor and hard to click directly), then pick the target face to extend to — the add-in creates a real extend/join feature closing the gap automatically. The command loops (select source → select target → extend → repeat) so you can close every joint on a model without re-clicking a button each time; click Cancel on either prompt to stop. A failed extension shows a warning but keeps the loop going.
+* **Palette window memory:** The palette now remembers its size, position, and docking state between sessions, restoring exactly how you left it.
+* **Full settings persistence:** All configuration fields and the collapsed/expanded state of each collapsible section are now continuously auto-saved and restored, not just at Generate time.
+
 ## ✨ What's New in v1.0.1
 
 * **Theme accent border:** All built-in and custom themes now render a subtle primary-color border around the palette body for a more polished look. Legacy `style.css` files are automatically upgraded when exported from ThemeDesigner.

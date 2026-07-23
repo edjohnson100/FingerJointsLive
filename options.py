@@ -67,6 +67,13 @@ class FingerJointFeatureInput(object):
         self.gapToPart = FusionExpression("0 mm")
         self.isPreviewEnabled = True
         self.theme = 'default'
+        self.collapsedSections = {}
+        # Palette window geometry (remembered across sessions).
+        self.paletteDockingState = int(adsk.core.PaletteDockingStates.PaletteDockStateRight)
+        self.paletteWidth = 340
+        self.paletteHeight = 600
+        self.paletteLeft = 100
+        self.paletteTop = 100
         self.readDefaults()
 
     def writeDefaults(self):
@@ -83,6 +90,12 @@ class FingerJointFeatureInput(object):
             'gapToPart': self.gapToPart.expression,
             'isPreviewEnabled': self.isPreviewEnabled,
             'theme': self.theme,
+            'collapsedSections': self.collapsedSections,
+            'paletteDockingState': self.paletteDockingState,
+            'paletteWidth': self.paletteWidth,
+            'paletteHeight': self.paletteHeight,
+            'paletteLeft': self.paletteLeft,
+            'paletteTop': self.paletteTop,
         }
         with open(self.DEFAULTS_FILENAME, 'w', encoding='UTF-8') as json_file:
             json.dump(defaultData, json_file, ensure_ascii=False)
@@ -117,3 +130,9 @@ class FingerJointFeatureInput(object):
         self.gapToPart = expressionOrDefault(defaultData.get('gapToPart'), self.gapToPart)
         self.isPreviewEnabled = defaultData.get('isPreviewEnabled', self.isPreviewEnabled)
         self.theme = defaultData.get('theme', self.theme)
+        self.collapsedSections = defaultData.get('collapsedSections', self.collapsedSections)
+        self.paletteDockingState = defaultData.get('paletteDockingState', self.paletteDockingState)
+        self.paletteWidth = defaultData.get('paletteWidth', self.paletteWidth)
+        self.paletteHeight = defaultData.get('paletteHeight', self.paletteHeight)
+        self.paletteLeft = defaultData.get('paletteLeft', self.paletteLeft)
+        self.paletteTop = defaultData.get('paletteTop', self.paletteTop)

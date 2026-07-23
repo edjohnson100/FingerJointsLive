@@ -30,7 +30,9 @@ preview_group_id = 'FingerJointsLive_Preview'
 active_selections = {
     'body0': [],
     'body1': [],
-    'direction': None
+    'direction': None,
+    'extendSource': None,
+    'extendTargetFace': None
 }
 
 PRESETS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'presets.json')
@@ -62,6 +64,79 @@ def createCutFeature(parentComponent, targetBody, toolBodyFeature):
     cutInput.isNewComponent = False
     return parentComponent.features.combineFeatures.add(cutInput)
 
+def createExtensionFeature(parentComponent, face, length):
+    """Extrudes the given face outward along its own normal and joins the result onto
+    its owning body, closing a butt-joint gap. participantBodies is restricted to the
+    face's own owning body so the Join cannot merge with some other unrelated body that
+    the extension happens to touch or pass through along the way."""
+    extrudes = parentComponent.features.extrudeFeatures
+    extInput = extrudes.createInput(face, adsk.fusion.FeatureOperations.JoinFeatureOperation)
+    extInput.setDistanceExtent(False, adsk.core.ValueInput.createByReal(length))
+    extInput.participantBodies = [face.body]
+    return extrudes.add(extInput)
+
+def extend_face_to_close_butt_joint():
+    """Extends the user-selected source face (or the smallest planar face touching a
+    selected edge/vertex) outward until it reaches the user-selected target face,
+    closing a butt joint so the existing overlap-based finger-joint pipeline can run."""
+    sourceEntity = active_selections.get('extendSource')
+    targetFace = active_selections.get('extendTargetFace')
+    if sourceEntity is None or targetFace is None:
+        ui.messageBox("Please select both a source (edge, corner, or face) and a target face to extend to.")
+        return False
+
+    sourceFace = geometry.resolveSourceFace(sourceEntity)
+    if sourceFace is None:
+        ui.messageBox("Could not find a planar face to extend from that selection.")
+        return False
+
+    try:
+        direction = geometry.getFaceOutwardNormal(sourceFace)
+        length = geometry.extensionLengthToFace(sourceFace, direction, targetFace)
+    except Exception:
+        ui.messageBox(f'Could not compute the extension:\n{traceback.format_exc()}')
+        return False
+
+    if length <= 0:
+        ui.messageBox("The target face is on the wrong side of the source face - check your selections.")
+        return False
+
+    activeComponent = app.activeProduct.activeComponent
+    design = activeComponent.parentDesign
+    prevType = design.designType
+    design.designType = adsk.fusion.DesignTypes.ParametricDesignType
+    try:
+        try:
+            extFeat = createExtensionFeature(activeComponent, sourceFace, length)
+        except Exception:
+            ui.messageBox(f'Could not create the extension feature:\n{traceback.format_exc()}')
+            return False
+        adsk.doEvents()
+
+        if extFeat and design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
+            try:
+                if extFeat.timelineObject and extFeat.timelineObject.isValid:
+                    idx = extFeat.timelineObject.index
+                    max_num = 0
+                    for group in design.timeline.timelineGroups:
+                        if group.name.startswith("CFG_Extend_"):
+                            try: max_num = max(max_num, int(group.name.split("_")[-1]))
+                            except ValueError: pass
+                    new_group = design.timeline.timelineGroups.add(idx, idx)
+                    new_group.name = f"CFG_Extend_{max_num + 1:03d}"
+            except: pass
+    finally:
+        design.designType = prevType
+
+    active_selections['extendSource'] = None
+    active_selections['extendTargetFace'] = None
+    palette = ui.palettes.itemById(palette_id)
+    if palette:
+        palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'extendSource', 'count': 0}))
+        palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'extendTargetFace', 'count': 0}))
+
+    return True
+
 
 def clear_preview():
     """Removes any temporary red preview graphics from the canvas."""
@@ -76,19 +151,12 @@ def clear_preview():
         pass
 
 
-def preview_joints(payload):
-    """Calculates tool bodies and displays them as temporary red blocks."""
-    clear_preview()
-    inputs = options.FingerJointFeatureInput()
-    
-    inputs.body0 = active_selections['body0']
-    inputs.body1 = active_selections['body1']
-    inputs.direction = active_selections['direction']
-    
-    inputs.dynamicSizeType = payload.get('dynamicSizeType')
-    inputs.placementType = payload.get('placementType')
+def apply_payload_settings(inputs, payload):
+    """Copies the joint-parameter fields of an HTML payload onto a FingerJointFeatureInput."""
+    inputs.dynamicSizeType = payload.get('dynamicSizeType', inputs.dynamicSizeType)
+    inputs.placementType = payload.get('placementType', inputs.placementType)
     inputs.isNumberOfFingersFixed = payload.get('isNumberOfFingersFixed', False)
-    
+
     if payload.get('fixedNumFingers'): inputs.fixedNumFingers = int(payload.get('fixedNumFingers'))
     if payload.get('fixedNotchSize'): inputs.fixedNotchSize.expression = payload.get('fixedNotchSize')
     if payload.get('fixedFingerSize'): inputs.fixedFingerSize.expression = payload.get('fixedFingerSize')
@@ -96,6 +164,18 @@ def preview_joints(payload):
     if payload.get('minFingerSize'): inputs.minFingerSize.expression = payload.get('minFingerSize')
     if payload.get('gap'): inputs.gap.expression = payload.get('gap')
     if payload.get('gapToPart'): inputs.gapToPart.expression = payload.get('gapToPart')
+
+
+def preview_joints(payload):
+    """Calculates tool bodies and displays them as temporary red blocks."""
+    clear_preview()
+    inputs = options.FingerJointFeatureInput()
+
+    inputs.body0 = active_selections['body0']
+    inputs.body1 = active_selections['body1']
+    inputs.direction = active_selections['direction']
+
+    apply_payload_settings(inputs, payload)
 
     bodies0 = inputs.body0
     bodies1 = inputs.body1
@@ -157,18 +237,8 @@ def execute_joints(payload):
         inputs.body0 = active_selections['body0']
         inputs.body1 = active_selections['body1']
         inputs.direction = active_selections['direction']
-        
-        inputs.dynamicSizeType = payload.get('dynamicSizeType')
-        inputs.placementType = payload.get('placementType')
-        inputs.isNumberOfFingersFixed = payload.get('isNumberOfFingersFixed', False)
-        
-        if payload.get('fixedNumFingers'): inputs.fixedNumFingers = int(payload.get('fixedNumFingers'))
-        if payload.get('fixedNotchSize'): inputs.fixedNotchSize.expression = payload.get('fixedNotchSize')
-        if payload.get('fixedFingerSize'): inputs.fixedFingerSize.expression = payload.get('fixedFingerSize')
-        if payload.get('minNotchSize'): inputs.minNotchSize.expression = payload.get('minNotchSize')
-        if payload.get('minFingerSize'): inputs.minFingerSize.expression = payload.get('minFingerSize')
-        if payload.get('gap'): inputs.gap.expression = payload.get('gap')
-        if payload.get('gapToPart'): inputs.gapToPart.expression = payload.get('gapToPart')
+
+        apply_payload_settings(inputs, payload)
 
         bodies0 = inputs.body0
         bodies1 = inputs.body1
@@ -286,9 +356,9 @@ class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
         clear_preview() # Clear preview if selections change
         global active_selections
         selections = [self.sel_input.selection(i).entity for i in range(self.sel_input.selectionCount)]
-        
-        if self.target == 'direction':
-            active_selections['direction'] = selections[0] if selections else None
+
+        if self.target in ('direction', 'extendSource', 'extendTargetFace'):
+            active_selections[self.target] = selections[0] if selections else None
         else:
             active_selections[self.target] = selections
             
@@ -298,46 +368,71 @@ class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
             count = len(selections)
             palette.sendInfoToHTML('selection_updated', json.dumps({'target': self.target, 'count': count}))
 
+        # Chain the "close butt joint" loop: source -> target face -> extend -> back to source.
+        # An empty selection (OK clicked with nothing picked) ends the loop, same as Cancel.
+        if self.target == 'extendSource' and selections:
+            cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendTargetFace')
+            if cmd_def: cmd_def.execute()
+        elif self.target == 'extendTargetFace' and selections:
+            extend_face_to_close_butt_joint()
+            cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendSource')
+            if cmd_def: cmd_def.execute()
+
 class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
     def __init__(self, target):
         super().__init__()
         self.target = target
         
     def notify(self, args):
-        cmd = args.command
-        
-        prompt = ''
-        if self.target == 'body0':
-            prompt = 'Select one or more 1st bodies (e.g., opposite box walls), then click OK.'
-        elif self.target == 'body1':
-            prompt = 'Select one or more 2nd bodies (e.g., opposite box walls), then click OK.'
-        elif self.target == 'direction':
-            prompt = 'Select a linear edge to set direction, or click OK to auto-detect.'
-            
-        selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {self.target}', prompt)
-        
-        if self.target == 'direction':
-            selInput.addSelectionFilter('LinearEdges')
-            selInput.addSelectionFilter('SketchLines')
-            selInput.setSelectionLimits(0, 1)
-        else:
-            selInput.addSelectionFilter('SolidBodies')
-            selInput.setSelectionLimits(0, 0) # 0 allows clearing selections
-            
-        # Pre-select existing entities so the user doesn't lose their previous picks
-        global active_selections
-        existing = active_selections.get(self.target)
-        if existing:
-            if isinstance(existing, list):
-                for ent in existing:
-                    try: selInput.addSelection(ent)
-                    except: pass
+        try:
+            cmd = args.command
+
+            prompt = ''
+            if self.target == 'body0':
+                prompt = 'Select one or more 1st bodies (e.g., opposite box walls), then click OK.'
+            elif self.target == 'body1':
+                prompt = 'Select one or more 2nd bodies (e.g., opposite box walls), then click OK.'
+            elif self.target == 'direction':
+                prompt = 'Select a linear edge to set direction, or click OK to auto-detect.'
+            elif self.target == 'extendSource':
+                prompt = 'Select an edge, corner, or face on the body to extend, then click OK.'
+            elif self.target == 'extendTargetFace':
+                prompt = 'Select the face to extend to, then click OK.'
+
+            selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {self.target}', prompt)
+
+            if self.target == 'direction':
+                selInput.addSelectionFilter('LinearEdges')
+                selInput.addSelectionFilter('SketchLines')
+                selInput.setSelectionLimits(0, 1)
+            elif self.target == 'extendSource':
+                selInput.addSelectionFilter('Vertices')
+                selInput.addSelectionFilter('Edges')
+                selInput.addSelectionFilter('PlanarFaces')
+                selInput.setSelectionLimits(0, 1)
+            elif self.target == 'extendTargetFace':
+                selInput.addSelectionFilter('PlanarFaces')
+                selInput.setSelectionLimits(0, 1)
             else:
-                try: selInput.addSelection(existing)
-                except: pass
-            
-        self.onExecute = SelectionCommandExecuteHandler(self.target, selInput)
-        cmd.execute.add(self.onExecute)
+                selInput.addSelectionFilter('SolidBodies')
+                selInput.setSelectionLimits(0, 0) # 0 allows clearing selections
+
+            # Pre-select existing entities so the user doesn't lose their previous picks
+            global active_selections
+            existing = active_selections.get(self.target)
+            if existing:
+                if isinstance(existing, list):
+                    for ent in existing:
+                        try: selInput.addSelection(ent)
+                        except: pass
+                else:
+                    try: selInput.addSelection(existing)
+                    except: pass
+
+            self.onExecute = SelectionCommandExecuteHandler(self.target, selInput)
+            cmd.execute.add(self.onExecute)
+        except Exception:
+            if ui: ui.messageBox(f'Could not create selection dialog for "{self.target}":\n{traceback.format_exc()}')
 
 
 # --- HTML ROUTER ---
@@ -352,17 +447,35 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
             if action in ('select_body0', 'select_body1', 'select_direction'):
                 target = action.replace('select_', '')
                 cmd_def_id = f'FJL_Select_{target}'
-                
+
                 cmd_def = ui.commandDefinitions.itemById(cmd_def_id)
                 if cmd_def:
                     cmd_def.execute()
-                
+                else:
+                    ui.messageBox(f'Selection command "{cmd_def_id}" is not registered. '
+                                  'Please fully Stop and Run the add-in again (a plain Reload may not re-register new commands).')
+
             elif action == 'generate':
                 execute_joints(data.get('payload'))
-                
+
             elif action == 'preview':
                 preview_joints(data.get('payload'))
-                
+
+            elif action == 'extend_loop_start':
+                cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendSource')
+                if cmd_def:
+                    cmd_def.execute()
+                else:
+                    ui.messageBox('Selection command "FJL_Select_extendSource" is not registered. '
+                                  'Please fully Stop and Run the add-in again (a plain Reload may not re-register new commands).')
+
+            elif action == 'save_settings':
+                prefs = options.FingerJointFeatureInput()
+                apply_payload_settings(prefs, data.get('payload', {}))
+                prefs.collapsedSections = data.get('payload', {}).get('collapsedSections', {})
+                prefs.writeDefaults()
+
+
             elif action == 'clear_selections':
                 global active_selections
                 active_selections['body0'] = []
@@ -420,7 +533,8 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     'gap': defaults.gap.expression,
                     'gapToPart': defaults.gapToPart.expression,
                     'isPreviewEnabled': defaults.isPreviewEnabled,
-                    'theme': defaults.theme
+                    'theme': defaults.theme,
+                    'collapsedSections': defaults.collapsedSections
                 }
                 presets = load_presets_dict()
                 defaults_dict['presets'] = list(presets.keys())
@@ -475,9 +589,10 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     'gap': defaults.gap.expression,
                     'gapToPart': defaults.gapToPart.expression,
                     'isPreviewEnabled': defaults.isPreviewEnabled,
-                    'theme': defaults.theme
+                    'theme': defaults.theme,
+                    'collapsedSections': defaults.collapsedSections
                 }
-                
+
                 # Check if this document has a saved preset attribute from a previous run
                 try:
                     doc = app.activeDocument
@@ -509,9 +624,28 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
             if ui: ui.messageBox(f'HTML Event Failed:\n{traceback.format_exc()}')
 
 
+def save_palette_geometry():
+    """Remembers the palette's current docking state, size, and (if floating) position
+    so it can be restored the next time the palette is opened."""
+    try:
+        palette = ui.palettes.itemById(palette_id)
+        if not palette:
+            return
+        prefs = options.FingerJointFeatureInput()
+        prefs.paletteDockingState = int(palette.dockingState)
+        prefs.paletteWidth = palette.width
+        prefs.paletteHeight = palette.height
+        prefs.paletteLeft = palette.left
+        prefs.paletteTop = palette.top
+        prefs.writeDefaults()
+    except:
+        pass
+
+
 class MyPaletteCloseHandler(adsk.core.UserInterfaceGeneralEventHandler):
     def __init__(self): super().__init__()
     def notify(self, args):
+        save_palette_geometry()
         clear_preview()
 
 
@@ -525,10 +659,14 @@ class MyCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             script_folder = os.path.dirname(os.path.realpath(__file__))
             html_path = os.path.join(script_folder, 'resources', 'fingerjointslive_index.html')
             url = 'file:///' + html_path.replace('\\', '/') + f'?t={time.time()}'
-            
-            palette = ui.palettes.add(palette_id, 'Finger Joints Live', url, True, True, True, 340, 600)
-            palette.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
-            
+
+            prefs = options.FingerJointFeatureInput()
+            palette = ui.palettes.add(palette_id, 'Finger Joints Live', url, True, True, True,
+                                       prefs.paletteWidth, prefs.paletteHeight)
+            palette.dockingState = prefs.paletteDockingState
+            if prefs.paletteDockingState == adsk.core.PaletteDockingStates.PaletteDockStateFloating:
+                palette.setPosition(prefs.paletteLeft, prefs.paletteTop)
+
             onHtmlEvent = MyHTMLEventHandler()
             palette.incomingFromHTML.add(onHtmlEvent)
             handlers.append(onHtmlEvent)
@@ -557,7 +695,7 @@ def run(context):
         handlers.append(onCreated)
         
         # Pre-register Selection Commands
-        for target in ['body0', 'body1', 'direction']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
             c_id = f'FJL_Select_{target}'
             cdef = ui.commandDefinitions.itemById(c_id)
             if cdef: cdef.deleteMe()
@@ -574,11 +712,12 @@ def run(context):
 
 
 def stop(context):
+    save_palette_geometry()
     clear_preview()
     try:
         if ui.palettes.itemById(palette_id): ui.palettes.itemById(palette_id).deleteMe()
         if ui.commandDefinitions.itemById(command_id): ui.commandDefinitions.itemById(command_id).deleteMe()
-        for target in ['body0', 'body1', 'direction']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
             c_id = f'FJL_Select_{target}'
             if ui.commandDefinitions.itemById(c_id): ui.commandDefinitions.itemById(c_id).deleteMe()
         panel = ui.allToolbarPanels.itemById('SolidModifyPanel')

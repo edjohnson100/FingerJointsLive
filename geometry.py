@@ -145,6 +145,52 @@ def createBodyFromOverlap(body0, body1):
     return overlapBody
 
 
+# --- Manual butt-joint closing ---
+# The user explicitly picks the face to extend (or an edge/vertex on it, since it's
+# often tucked against the neighboring body and hard to click directly) and a target
+# face to extend to. No guessing about which body/face/direction is involved.
+
+def resolveSourceFace(entity):
+    """Resolves a user selection (BRepFace, BRepEdge, or BRepVertex) down to the planar
+    face to extend: the face itself, or - among the faces touching the selected edge or
+    vertex - the smallest planar one (the true end-cap face is reliably the smallest
+    face touching any point on it)."""
+    if isinstance(entity, adsk.fusion.BRepFace):
+        candidates = [entity]
+    elif isinstance(entity, adsk.fusion.BRepEdge):
+        candidates = list(entity.faces)
+    elif isinstance(entity, adsk.fusion.BRepVertex):
+        candidates = list(entity.faces)
+    else:
+        return None
+    planarFaces = [f for f in candidates if f.geometry.objectType == adsk.core.Plane.classType()]
+    if not planarFaces:
+        return None
+    return min(planarFaces, key=lambda f: f.area)
+
+
+def getFaceOutwardNormal(face):
+    """The face's true outward-oriented normal (respecting the face's own parametric
+    orientation), rather than an approximation from bounding-box geometry."""
+    point = face.pointOnFace
+    success, normal = face.evaluator.getNormalAtPoint(point)
+    if not success:
+        raise RuntimeError("Could not evaluate the face's normal.")
+    normal.normalize()
+    return normal
+
+
+def extensionLengthToFace(sourceFace, direction, targetFace, margin=0.0):
+    """Exact distance from sourceFace's plane to targetFace's plane along `direction`.
+    Returns a value <= 0 if targetFace is on the wrong side (not in the direction we'd
+    extend)."""
+    vector = sourceFace.pointOnFace.vectorTo(targetFace.pointOnFace)
+    distance = vector.dotProduct(direction)
+    if distance <= 0:
+        return distance
+    return distance + margin
+
+
 def createToolBodies(inputs):
     overlap = createBodyFromOverlap(inputs.body0, inputs.body1)
     coordinateSystem = CoordinateSystem(inputs.direction, overlap)
