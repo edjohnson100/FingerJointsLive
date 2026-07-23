@@ -28,21 +28,22 @@ This "Live" version takes the core mathematical engine of Florian's original add
 This script requires a quick manual installation. You can choose to install it in Fusion's default scripts directory or a custom folder of your choice.
 
 #### Option 1: Install in the Default Fusion Directory
-1. **Download:** Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
-Download the zip file using the green `Code` button above or simply click this link: [Finger Joints Live Main Branch](https://github.com/edjohnson100/FingerJointsLive/archive/refs/heads/main.zip)
-2. **Move the Folder:** Move the entire `FingerJointsLive` folder into your native Fusion Scripts directory:
+1. **Download:** Download the source code as a ZIP file using the green `Code` button above, or simply click this link: [Finger Joints Live Main Branch](https://github.com/edjohnson100/FingerJointsLive/archive/refs/heads/main.zip)
+2. **Extract and Rename:** Extract the ZIP. The extracted folder will be named `FingerJointsLive-main`, **not** `FingerJointsLive` — GitHub always appends the branch or version name to the repo name like this. Rename the folder to exactly `FingerJointsLive` (Fusion will not recognize the add-in otherwise).
+3. **Move the Folder:** Move the entire `FingerJointsLive` folder into your native Fusion Scripts directory:
    * **Windows:** `%appdata%\Autodesk\Autodesk Fusion 360\API\Addins`
    * **Mac:** `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Addins`
-3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
-4. **Run the Script:** Make sure the **Add-ins** filter checkbox is checked. You should see **FingerJointsLive** in the list of add-ins. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
+4. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
+5. **Run the Script:** Make sure the **Add-ins** filter checkbox is checked. You should see **FingerJointsLive** in the list of add-ins. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
 #### Option 2: Install in a Custom Directory
-1. **Download:** Download the source code as a ZIP file and extract the `FingerJointsLive-main` folder. Rename the folder to `FingerJointsLive`.
-2. **Organize:** Create a dedicated folder on your computer for your Fusion tools (e.g., `Documents\Fusion_Tools`) and move the `FingerJointsLive` folder inside it.
-3. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
-4. **Add the Add-in:** Click the grey **"+"** icon next to the search box at the top of the dialog and select **Script or add-in from device**.
-5. **Locate:** Navigate to your custom folder, select the `FingerJointsLive` folder, and click **Select Folder**.
-6. **Run the Add-in:** Make sure the **Add-ins** filter checkbox is checked. You should now see **FingerJointsLive** listed. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
+1. **Download:** Download the source code as a ZIP file using the green `Code` button above, or simply click this link: [Finger Joints Live Main Branch](https://github.com/edjohnson100/FingerJointsLive/archive/refs/heads/main.zip)
+2. **Extract and Rename:** Extract the ZIP. The extracted folder will be named `FingerJointsLive-main`, **not** `FingerJointsLive` — GitHub always appends the branch or version name to the repo name like this. Rename the folder to exactly `FingerJointsLive` (Fusion will not recognize the add-in otherwise).
+3. **Organize:** Create a dedicated folder on your computer for your Fusion tools (e.g., `Documents\Fusion_Tools`) and move the `FingerJointsLive` folder inside it.
+4. **Open Fusion:** Press `Shift + S` to open the **Scripts and Add-Ins** dialog.
+5. **Add the Add-in:** Click the grey **"+"** icon next to the search box at the top of the dialog and select **Script or add-in from device**.
+6. **Locate:** Navigate to your custom folder, select the `FingerJointsLive` folder, and click **Select Folder**.
+7. **Run the Add-in:** Make sure the **Add-ins** filter checkbox is checked. You should now see **FingerJointsLive** listed. You may want to check the 'Run on startup' option so it automatically runs when Fusion starts. Click the **Run** icon to execute the add-in.
 
 ## ✨ What's New in FingerJointsLive (The Remix)
 
