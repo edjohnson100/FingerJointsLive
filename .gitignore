@@ -53,7 +53,6 @@ CLAUDE.md
 # 6. Other Misc Files
 # ----------------------
 Archive/
-presets.json
 defaults.json
 .gitignore
 .npmignore

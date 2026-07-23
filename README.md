@@ -57,7 +57,7 @@ This script requires a quick manual installation. You can choose to install it i
 * **Persistent Live UI:** The palette docks on the side of your screen. You can tweak parameters, change settings, and see results without a modal dialog blocking your view or closing after every tweak.
 * **Multi-Body Selection:** You are no longer limited to joining just two bodies at a time! You can now select multiple "First Bodies" (e.g., two opposite walls of a box) and multiple "Second Bodies" (the adjoining walls). The add-in will calculate the intersections and generate the joints for all of them at once.
 * **Non-Destructive Live Preview:** Instead of computing heavy timeline features to show a preview, FingerJointsLive renders temporary "ghost" bodies on the canvas. This keeps your timeline clean and makes tweaking dimensions lightning-fast. Once you are happy with the preview, hit "Generate Finger Joints" to commit the changes to the timeline in a single undo step.
-* **Preset Saving:** Save your favorite joint configurations as named presets directly in the palette.
+* **Preset Saving:** Save your favorite joint configurations as named presets directly in the palette. A handful of sample presets ship with the add-in so there's something to try right away.
 
 ## Original Usage Guide (For Reference)
 

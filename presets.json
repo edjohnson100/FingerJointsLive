@@ -28,10 +28,10 @@
         "dynamicSizeType": "equal notch and finger size",
         "isNumberOfFingersFixed": false,
         "fixedNumFingers": "3",
-        "fixedNotchSize": "20 mm",
-        "fixedFingerSize": "20 mm",
-        "minNotchSize": "20 mm",
-        "minFingerSize": "40",
+        "fixedNotchSize": "40 mm",
+        "fixedFingerSize": "40 mm",
+        "minNotchSize": "40 mm",
+        "minFingerSize": "40 mm",
         "gap": "0 mm",
         "gapToPart": "0 mm"
     },
@@ -43,7 +43,7 @@
         "fixedNotchSize": "20 mm",
         "fixedFingerSize": "20 mm",
         "minNotchSize": "20 mm",
-        "minFingerSize": "20",
+        "minFingerSize": "20 mm",
         "gap": "0 mm",
         "gapToPart": "0 mm"
     }
