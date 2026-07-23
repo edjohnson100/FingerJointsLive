@@ -35,6 +35,15 @@ active_selections = {
     'extendTargetFace': None
 }
 
+# Timeline index the "Close Butt Joint" loop started at, and whether the next
+# selection command's destroy event is an internal chain step (not a real loop end).
+extend_loop_start_index = None
+extend_loop_chaining = False
+
+# Name of the most recently created CFG_Extend_XXX/CFG_Joint_XXX timeline group, so the palette's
+# "Undo Last Group" button can roll back an entire multi-feature operation in one click.
+last_group_info = None
+
 PRESETS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'presets.json')
 
 def load_presets_dict():
@@ -112,19 +121,6 @@ def extend_face_to_close_butt_joint():
             ui.messageBox(f'Could not create the extension feature:\n{traceback.format_exc()}')
             return False
         adsk.doEvents()
-
-        if extFeat and design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
-            try:
-                if extFeat.timelineObject and extFeat.timelineObject.isValid:
-                    idx = extFeat.timelineObject.index
-                    max_num = 0
-                    for group in design.timeline.timelineGroups:
-                        if group.name.startswith("CFG_Extend_"):
-                            try: max_num = max(max_num, int(group.name.split("_")[-1]))
-                            except ValueError: pass
-                    new_group = design.timeline.timelineGroups.add(idx, idx)
-                    new_group.name = f"CFG_Extend_{max_num + 1:03d}"
-            except: pass
     finally:
         design.designType = prevType
 
@@ -136,6 +132,63 @@ def extend_face_to_close_butt_joint():
         palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'extendTargetFace', 'count': 0}))
 
     return True
+
+
+def notify_last_group(name):
+    """Records the given timeline group as the one "Undo Last Group" will remove, and tells the
+    palette so its button can show/label itself."""
+    global last_group_info
+    last_group_info = {'name': name}
+    palette = ui.palettes.itemById(palette_id)
+    if palette:
+        palette.sendInfoToHTML('last_group_updated', json.dumps({'name': name}))
+
+
+def undo_last_group():
+    """Deletes every timeline item belonging to the most recently created CFG_Extend_XXX/CFG_Joint_XXX
+    group, so a multi-feature Extend-Loop or Generate operation can be rolled back in a single click."""
+    global last_group_info
+    info = last_group_info
+    last_group_info = None
+    if info:
+        try:
+            design = app.activeProduct.activeComponent.parentDesign
+            group = design.timeline.timelineGroups.itemByName(info['name'])
+            if group:
+                items = [group.item(i) for i in range(group.count)]
+                for item in reversed(items):
+                    try: item.deleteMe()
+                    except: pass
+        except Exception:
+            if ui: ui.messageBox(f'Could not undo the last group:\n{traceback.format_exc()}')
+    palette = ui.palettes.itemById(palette_id)
+    if palette:
+        palette.sendInfoToHTML('last_group_updated', json.dumps({'name': None}))
+
+
+def close_extend_loop_group():
+    """Wraps every feature created since the "Close Butt Joint" loop started (extend_loop_start_index)
+    into a single CFG_Extend_XXX timeline group, covering all iterations of the select/select/extend
+    cycle rather than one group per extension. No-ops if the loop never created a feature."""
+    global extend_loop_start_index
+    start_idx = extend_loop_start_index
+    extend_loop_start_index = None
+    if start_idx is None:
+        return
+    try:
+        design = app.activeProduct.activeComponent.parentDesign
+        end_idx = design.timeline.count - 1
+        if end_idx < start_idx:
+            return
+        max_num = 0
+        for group in design.timeline.timelineGroups:
+            if group.name.startswith("CFG_Extend_"):
+                try: max_num = max(max_num, int(group.name.split("_")[-1]))
+                except ValueError: pass
+        new_group = design.timeline.timelineGroups.add(start_idx, end_idx)
+        new_group.name = f"CFG_Extend_{max_num + 1:03d}"
+        notify_last_group(new_group.name)
+    except: pass
 
 
 def clear_preview():
@@ -328,6 +381,7 @@ def execute_joints(payload):
                     try:
                         new_group = design.timeline.timelineGroups.add(first_idx, last_idx)
                         new_group.name = f"CFG_Joint_{max_num + 1:03d}"
+                        notify_last_group(new_group.name)
                     except: pass
                         
             design.designType = prevType
@@ -369,14 +423,21 @@ class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
             palette.sendInfoToHTML('selection_updated', json.dumps({'target': self.target, 'count': count}))
 
         # Chain the "close butt joint" loop: source -> target face -> extend -> back to source.
-        # An empty selection (OK clicked with nothing picked) ends the loop, same as Cancel.
+        # An empty selection (OK clicked with nothing picked) ends the loop, same as Cancel; both
+        # are caught by ExtendLoopDestroyHandler, which closes the loop's timeline group since
+        # extend_loop_chaining is only set True (suppressing that close) on an actual chain step.
+        global extend_loop_chaining
         if self.target == 'extendSource' and selections:
             cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendTargetFace')
-            if cmd_def: cmd_def.execute()
+            if cmd_def:
+                extend_loop_chaining = True
+                cmd_def.execute()
         elif self.target == 'extendTargetFace' and selections:
             extend_face_to_close_butt_joint()
             cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendSource')
-            if cmd_def: cmd_def.execute()
+            if cmd_def:
+                extend_loop_chaining = True
+                cmd_def.execute()
 
 class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
     def __init__(self, target):
@@ -431,8 +492,27 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
 
             self.onExecute = SelectionCommandExecuteHandler(self.target, selInput)
             cmd.execute.add(self.onExecute)
+
+            # The extend loop ends whenever an extendSource/extendTargetFace command terminates
+            # without immediately chaining to the next step (OK-with-nothing-selected, or Cancel).
+            if self.target in ('extendSource', 'extendTargetFace'):
+                self.onDestroy = ExtendLoopDestroyHandler()
+                cmd.destroy.add(self.onDestroy)
         except Exception:
             if ui: ui.messageBox(f'Could not create selection dialog for "{self.target}":\n{traceback.format_exc()}')
+
+
+class ExtendLoopDestroyHandler(adsk.core.CommandEventHandler):
+    """Closes the extend loop's timeline group once the select/select/extend cycle truly ends.
+    extend_loop_chaining is set True right before chaining to the next selection command, so a
+    destroy event that finds it False means this termination (Cancel, or OK with nothing picked)
+    is the real end of the loop rather than a step in the middle of it."""
+    def notify(self, args):
+        global extend_loop_chaining
+        if extend_loop_chaining:
+            extend_loop_chaining = False
+            return
+        close_extend_loop_group()
 
 
 # --- HTML ROUTER ---
@@ -462,12 +542,20 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 preview_joints(data.get('payload'))
 
             elif action == 'extend_loop_start':
+                global extend_loop_start_index
+                try:
+                    extend_loop_start_index = app.activeProduct.activeComponent.parentDesign.timeline.count
+                except Exception:
+                    extend_loop_start_index = None
                 cmd_def = ui.commandDefinitions.itemById('FJL_Select_extendSource')
                 if cmd_def:
                     cmd_def.execute()
                 else:
                     ui.messageBox('Selection command "FJL_Select_extendSource" is not registered. '
                                   'Please fully Stop and Run the add-in again (a plain Reload may not re-register new commands).')
+
+            elif action == 'undo_last_group':
+                undo_last_group()
 
             elif action == 'save_settings':
                 prefs = options.FingerJointFeatureInput()

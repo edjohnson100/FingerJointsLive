@@ -33,13 +33,22 @@
             <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="showHelp()" title="Show Quick Help">Help</button>
             <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="sendAction('clear_selections')" title="Clear selected bodies">Clear Picks</button>
         </div>
-        
+
+        <div id="undo-group-bar" style="display:none; margin-bottom: 10px;">
+            <button id="btn-undo-group" class="btn-secondary" style="width: 100%; font-size: 11px;" onclick="sendAction('undo_last_group')" title="Removes every feature created by the last Generate/Extend Loop operation, as one step"></button>
+        </div>
+
         <div class="data-container" style="margin-bottom: 15px;">
             <button id="btn-body0" class="btn-secondary" onclick="sendAction('select_body0')">Select 1st Body/Bodies (0)</button>
             <button id="btn-body1" class="btn-secondary" onclick="sendAction('select_body1')">Select 2nd Body/Bodies (0)</button>
             <button id="btn-dir" class="btn-secondary" onclick="sendAction('select_direction')">Select Direction (Auto)</button>
         </div>
         
+        <div class="input-group" style="margin-bottom: 15px;">
+            <button class="btn-secondary" onclick="previewJoints()">Preview</button>
+            <button class="btn-primary" onclick="generateJoints()">Generate Joints</button>
+        </div>
+
         <div class="controls-bar">
             <div class="search-container">
                 <select id="presetSelect" onchange="loadPreset()">
@@ -49,20 +58,6 @@
             <button class="icon-btn" onclick="savePreset()" title="Save current settings as preset">Save</button>
             <button class="icon-btn del-btn" onclick="deletePreset()" title="Delete selected preset">X</button>
             <button class="icon-btn" onclick="resetDefaults()" title="Reset all settings to defaults">Clear</button>
-        </div>
-
-        <div class="section" id="section-buttjoint">
-            <div class="section-header" onclick="toggleSection(this.parentElement)">
-                <h3>Close Butt Joint</h3>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="section-content data-container">
-                <button class="btn-primary" onclick="sendAction('extend_loop_start')">Extend Butt Joints (Loop)</button>
-                <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
-                    Repeatedly prompts for an edge/corner/face to extend, then the target face to extend to.
-                    Click Cancel on either prompt to stop.
-                </p>
-            </div>
         </div>
 
         <div class="section" id="section-config">
@@ -152,12 +147,21 @@
             </div>
         </div>
 
-        <div class="input-group" style="margin-top: 15px;">
-            <button class="btn-secondary" onclick="previewJoints()">Preview</button>
-            <button class="btn-primary" onclick="generateJoints()">Generate Joints</button>
+        <div class="section" id="section-buttjoint">
+            <div class="section-header" onclick="toggleSection(this.parentElement)">
+                <h3>Close Butt Joint</h3>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="section-content data-container">
+                <button class="btn-primary" onclick="sendAction('extend_loop_start')">Extend Butt Joints (Loop)</button>
+                <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
+                    Repeatedly prompts for an edge/corner/face to extend, then the target face to extend to.
+                    Click Cancel on either prompt to stop.
+                </p>
+            </div>
         </div>
     </div>
-    
+
     <!-- TAB 2: THEME MANAGER -->
     <div id="tab-settings" class="tab-content">
         <div class="section">
@@ -404,7 +408,10 @@
 
         function toggleSection(sectionEl) {
             sectionEl.classList.toggle('collapsed');
-            saveSettings();
+            // Save immediately (not debounced) so the collapsed state isn't lost if the palette
+            // is closed before a debounced saveSettings() timer would otherwise have fired.
+            clearTimeout(saveSettingsTimeout);
+            adsk.fusionSendData('notification', JSON.stringify({ action: 'save_settings', payload: getPayload() }));
         }
 
         function getPayload() {
@@ -508,6 +515,16 @@
                             updateSelBtn('btn-dir', info.count ? 'Direction (Selected)' : 'Select Direction (Auto)', info.count > 0);
                         }
                         autoPreview();
+                    } else if (action === 'last_group_updated') {
+                        const info = JSON.parse(data);
+                        const bar = document.getElementById('undo-group-bar');
+                        const btn = document.getElementById('btn-undo-group');
+                        if (info.name) {
+                            btn.innerText = `Undo Last Group (${info.name})`;
+                            bar.style.display = '';
+                        } else {
+                            bar.style.display = 'none';
+                        }
                     } else if (action === 'file_imported') {
                         const payload = JSON.parse(data);
                         if (payload.file_type === 'css') {
