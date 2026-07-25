@@ -25,6 +25,11 @@ handlers = []
 palette_id = 'FingerJointsLive_Palette'
 command_id = 'FingerJointsLive_Launcher'
 preview_group_id = 'FingerJointsLive_Preview'
+undo_group_command_id = 'FingerJointsLive_UndoGroup'
+
+# Zero-arg callable currently pending execution inside the hidden undo-group command
+# (see _run_grouped). Only ever set/consumed synchronously within a single call stack.
+_pending_grouped_work = None
 
 # Global state to hold selections (since HTML cannot hold Fusion BRep objects)
 active_selections = {
@@ -68,6 +73,50 @@ def createCutFeature(parentComponent, targetBody, toolBodyFeature):
     cutInput.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
     cutInput.isNewComponent = False
     return parentComponent.features.combineFeatures.add(cutInput)
+
+def _run_grouped(work, name):
+    """Runs `work` (a zero-arg callable) inside the hidden undo-group command's execute handler
+    so every Fusion API call it makes gets bundled by Fusion into that one execute's Undo
+    transaction, instead of one Undo entry per feature. `name` becomes the label shown in the
+    Undo dropdown. Safe with a single global slot because this is only ever called synchronously
+    from UI-triggered code (e.g. the Generate button), and a command with no dialog inputs
+    auto-executes synchronously on creation, so the pending-work variable is set and consumed
+    within the same call stack before any other call could stomp it."""
+    global _pending_grouped_work
+    cmd_def = ui.commandDefinitions.itemById(undo_group_command_id)
+    if not cmd_def:
+        work()
+        return
+    _pending_grouped_work = work
+    cmd_def.name = name
+    cmd_def.execute()
+
+
+class UndoGroupExecuteHandler(adsk.core.CommandEventHandler):
+    """Runs whatever callable is currently stashed in _pending_grouped_work. Fusion bundles every
+    API call the callable makes into this execute's single Undo transaction."""
+    def notify(self, args):
+        global _pending_grouped_work
+        work = _pending_grouped_work
+        _pending_grouped_work = None
+        if work:
+            work()
+
+
+class UndoGroupCreatedHandler(adsk.core.CommandCreatedEventHandler):
+    """Attaches the execute handler to each instance of the hidden undo-group command. The
+    command has no dialog inputs, so it auto-executes immediately upon creation with no UI ever
+    shown; it exists purely to get Fusion's automatic per-Command Undo-transaction bundling for
+    work triggered from non-command code (e.g. the HTML router)."""
+    def notify(self, args):
+        try:
+            cmd = args.command
+            onExecute = UndoGroupExecuteHandler()
+            cmd.execute.add(onExecute)
+            handlers.append(onExecute)
+        except Exception:
+            if ui: ui.messageBox(f'Could not set up undo-group command:\n{traceback.format_exc()}')
+
 
 def createExtensionFeature(parentComponent, face, length):
     """Extrudes the given face outward along its own normal and joins the result onto
@@ -251,8 +300,105 @@ def preview_joints(payload):
                     except: pass
             
         app.activeViewport.refresh()
-        
+
+    if not success:
+        ui.messageBox("Could not compute some joints. Double-check dimensions and overlaps.")
+        return False
+
     return True
+
+
+def _create_joint_features(inputs, bodies0, bodies1, result):
+    """Computes tool bodies and creates the base/cut features for every body0 x body1 pair.
+    Runs entirely inside the hidden undo-group command's execute handler (see _run_grouped), so
+    Fusion bundles every feature created here - across every pair - into a single native Undo
+    entry instead of one entry per feature."""
+    success = True
+    computed_any = False
+
+    tempBRep = adsk.fusion.TemporaryBRepManager.get()
+    master_tools_0 = {b.entityToken: None for b in bodies0}
+    master_tools_1 = {b.entityToken: None for b in bodies1}
+
+    for b0 in bodies0:
+        for b1 in bodies1:
+            inputs.body0 = b0
+            inputs.body1 = b1
+            toolBodies = geometry.createToolBodies(inputs)
+            if toolBodies is True:
+                continue
+            elif toolBodies is False:
+                success = False
+            else:
+                computed_any = True
+                t0, t1 = toolBodies
+                if master_tools_0[b0.entityToken] is None:
+                    master_tools_0[b0.entityToken] = t0
+                else:
+                    tempBRep.booleanOperation(master_tools_0[b0.entityToken], t0, adsk.fusion.BooleanTypes.UnionBooleanType)
+
+                if master_tools_1[b1.entityToken] is None:
+                    master_tools_1[b1.entityToken] = t1
+                else:
+                    tempBRep.booleanOperation(master_tools_1[b1.entityToken], t1, adsk.fusion.BooleanTypes.UnionBooleanType)
+
+    if not success:
+        result['success'] = False
+        return
+
+    if computed_any:
+        activeComponent = app.activeProduct.activeComponent
+        design = activeComponent.parentDesign
+        prevType = design.designType
+        design.designType = adsk.fusion.DesignTypes.ParametricDesignType
+
+        created_features = []
+
+        for b0 in bodies0:
+            tool = master_tools_0[b0.entityToken]
+            if tool:
+                tFeat = createBaseFeature(activeComponent, tool, "FJL_Fingers")
+                if tFeat:
+                    created_features.append(tFeat)
+                    cFeat = createCutFeature(activeComponent, b0, tFeat)
+                    if cFeat: created_features.append(cFeat)
+
+        for b1 in bodies1:
+            tool = master_tools_1[b1.entityToken]
+            if tool:
+                tFeat = createBaseFeature(activeComponent, tool, "FJL_Notches")
+                if tFeat:
+                    created_features.append(tFeat)
+                    cFeat = createCutFeature(activeComponent, b1, tFeat)
+                    if cFeat: created_features.append(cFeat)
+
+        if created_features and design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
+            valid_indices = []
+            for f in created_features:
+                try:
+                    if f and hasattr(f, 'timelineObject') and f.timelineObject and f.timelineObject.isValid:
+                        valid_indices.append(f.timelineObject.index)
+                except:
+                    pass
+
+            if valid_indices:
+                first_idx = min(valid_indices)
+                last_idx = max(valid_indices)
+
+                max_num = 0
+                for group in design.timeline.timelineGroups:
+                    if group.name.startswith("CFG_Joint_"):
+                        try: max_num = max(max_num, int(group.name.split("_")[-1]))
+                        except ValueError: pass
+
+                try:
+                    new_group = design.timeline.timelineGroups.add(first_idx, last_idx)
+                    new_group.name = f"CFG_Joint_{max_num + 1:03d}"
+                except: pass
+
+        design.designType = prevType
+
+    result['success'] = True
 
 
 def execute_joints(payload):
@@ -260,7 +406,7 @@ def execute_joints(payload):
     try:
         clear_preview()
         inputs = options.FingerJointFeatureInput()
-        
+
         inputs.body0 = active_selections['body0']
         inputs.body1 = active_selections['body1']
         inputs.direction = active_selections['direction']
@@ -274,93 +420,15 @@ def execute_joints(payload):
             ui.messageBox("Please select at least one First Body and one Second Body.")
             return False
 
-        success = True
-        computed_any = False
-        
-        tempBRep = adsk.fusion.TemporaryBRepManager.get()
-        master_tools_0 = {b.entityToken: None for b in bodies0}
-        master_tools_1 = {b.entityToken: None for b in bodies1}
-        
-        for b0 in bodies0:
-            for b1 in bodies1:
-                inputs.body0 = b0
-                inputs.body1 = b1
-                toolBodies = geometry.createToolBodies(inputs)
-                if toolBodies is True:
-                    continue
-                elif toolBodies is False:
-                    success = False
-                else:
-                    computed_any = True
-                    t0, t1 = toolBodies
-                    if master_tools_0[b0.entityToken] is None:
-                        master_tools_0[b0.entityToken] = t0
-                    else:
-                        tempBRep.booleanOperation(master_tools_0[b0.entityToken], t0, adsk.fusion.BooleanTypes.UnionBooleanType)
-                        
-                    if master_tools_1[b1.entityToken] is None:
-                        master_tools_1[b1.entityToken] = t1
-                    else:
-                        tempBRep.booleanOperation(master_tools_1[b1.entityToken], t1, adsk.fusion.BooleanTypes.UnionBooleanType)
-                        
-        if not success:
+        result = {'success': True}
+        _run_grouped(lambda: _create_joint_features(inputs, bodies0, bodies1, result), 'FJL Generate Joints')
+
+        if not result['success']:
             ui.messageBox("Could not compute some joints. Double-check dimensions and overlaps.")
             return False
-            
-        if computed_any:
-            activeComponent = app.activeProduct.activeComponent
-            design = activeComponent.parentDesign
-            prevType = design.designType
-            design.designType = adsk.fusion.DesignTypes.ParametricDesignType
-                
-            created_features = []
-            
-            for b0 in bodies0:
-                tool = master_tools_0[b0.entityToken]
-                if tool:
-                    tFeat = createBaseFeature(activeComponent, tool, "FJL_Fingers")
-                    if tFeat: 
-                        created_features.append(tFeat)
-                        cFeat = createCutFeature(activeComponent, b0, tFeat)
-                        if cFeat: created_features.append(cFeat)
-                        
-            for b1 in bodies1:
-                tool = master_tools_1[b1.entityToken]
-                if tool:
-                    tFeat = createBaseFeature(activeComponent, tool, "FJL_Notches")
-                    if tFeat: 
-                        created_features.append(tFeat)
-                        cFeat = createCutFeature(activeComponent, b1, tFeat)
-                        if cFeat: created_features.append(cFeat)
-                        
-            if created_features and design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
-                valid_indices = []
-                for f in created_features:
-                    try:
-                        if f and hasattr(f, 'timelineObject') and f.timelineObject and f.timelineObject.isValid:
-                            valid_indices.append(f.timelineObject.index)
-                    except:
-                        pass
-                
-                if valid_indices:
-                    first_idx = min(valid_indices)
-                    last_idx = max(valid_indices)
-                    
-                    max_num = 0
-                    for group in design.timeline.timelineGroups:
-                        if group.name.startswith("CFG_Joint_"):
-                            try: max_num = max(max_num, int(group.name.split("_")[-1]))
-                            except ValueError: pass
-                    
-                    try:
-                        new_group = design.timeline.timelineGroups.add(first_idx, last_idx)
-                        new_group.name = f"CFG_Joint_{max_num + 1:03d}"
-                    except: pass
-                        
-            design.designType = prevType
-            
+
         inputs.writeDefaults()
-        
+
         try:
             doc = app.activeDocument
             if doc: doc.attributes.add('FingerJointsLive', 'LastUsedInDoc', json.dumps(payload))
@@ -752,6 +820,16 @@ def run(context):
         cmdDef.commandCreated.add(onCreated)
         handlers.append(onCreated)
         
+        # Hidden, UI-less command used purely to get Fusion's automatic per-Command Undo-transaction
+        # bundling for work triggered from non-command code (see _run_grouped). Never added to a
+        # toolbar/panel, so it's invisible to the user.
+        undoGroupCmdDef = ui.commandDefinitions.itemById(undo_group_command_id)
+        if undoGroupCmdDef: undoGroupCmdDef.deleteMe()
+        undoGroupCmdDef = ui.commandDefinitions.addButtonDefinition(undo_group_command_id, 'FingerJointsLive Grouped Work', '')
+        onUndoGroupCreated = UndoGroupCreatedHandler()
+        undoGroupCmdDef.commandCreated.add(onUndoGroupCreated)
+        handlers.append(onUndoGroupCreated)
+
         # Pre-register Selection Commands
         for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
             c_id = f'FJL_Select_{target}'
@@ -775,6 +853,7 @@ def stop(context):
     try:
         if ui.palettes.itemById(palette_id): ui.palettes.itemById(palette_id).deleteMe()
         if ui.commandDefinitions.itemById(command_id): ui.commandDefinitions.itemById(command_id).deleteMe()
+        if ui.commandDefinitions.itemById(undo_group_command_id): ui.commandDefinitions.itemById(undo_group_command_id).deleteMe()
         for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
             c_id = f'FJL_Select_{target}'
             if ui.commandDefinitions.itemById(c_id): ui.commandDefinitions.itemById(c_id).deleteMe()
