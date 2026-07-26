@@ -128,18 +128,21 @@
                 </div>
 
                 <div class="data-row">
-                    <div class="row-label">Gap Between Fingers</div>
+                    <div class="row-label" title="Positive = looser fit (extra clearance). Negative = tighter/interference fit — a good starting point for laser kerf compensation is a negative value close to your laser's kerf width, then fine-tune with a test cut.">Gap Between Fingers (Kerf Comp.)</div>
                     <div class="row-controls">
                         <input type="text" id="gap" value="0 mm" oninput="autoPreview()" style="width: 80px;">
                     </div>
                 </div>
 
                 <div class="data-row">
-                    <div class="row-label" title="Experimental">Gap To Part (Exp.)</div>
+                    <div class="row-label" title="Experimental. Adds a standoff/air gap between the mating faces (e.g. so a pin stands proud) — a different direction than the finger gap above and unrelated to kerf. Negative values are not supported.">Gap To Part (Exp.)</div>
                     <div class="row-controls">
                         <input type="text" id="gapToPart" value="0 mm" oninput="autoPreview()" style="width: 80px;">
                     </div>
                 </div>
+                <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
+                    Gap Between Fingers also doubles as kerf compensation: a negative value oversizes the joint before cutting so the laser's kerf brings it back to a snug fit. The right value depends on your laser and material — start near your kerf width and adjust based on a test cut. Gap To Part is unrelated (a standoff gap, not kerf) and does not accept negative values.
+                </p>
             </div>
         </div>
 

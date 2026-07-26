@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.2.0
+**Version:** 1.2.1
 
 **Author:** Ed Johnson (Making With An EdJ)
 
@@ -11,6 +11,10 @@ This "Live" version takes the core mathematical engine of Florian's original add
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ---
+## ✨ What's New in v1.2.1
+
+* **Fixed:** A negative `Gap Between Fingers` value (used for laser kerf compensation on a tight/press fit) could leave a thin, uncut sliver of material right at the true ends of a finger/notch row — both at closed box corners and at open/interior joints (e.g. a shelf mortise-and-tenon). The outermost cut on each end of a row now always reaches the row's true boundary regardless of gap sign; positive gap values are unaffected.
+
 ## ✨ What's New in v1.2.0
 
 * **Extend Loop grouped as one timeline entry:** Running the Close Butt Joint loop multiple times in a row now wraps all of the extensions into a single `CFG_Extend_XXX` timeline group in the timeline, instead of creating a separate group per extension — so you can delete the whole operation at once from the timeline if needed. Note: each extension is still its own native Undo step, since Fusion gives every completed selection command its own Ctrl+Z entry.
@@ -84,14 +88,17 @@ Finally, instead of fixing the number of fingers, we might want to have both fin
 
 
 Starting with version 1.1 the add-in can also add a small gap between the fingers and notches for an easier fit
-of the produced parts.
+of the produced parts. This same setting doubles as kerf compensation for laser-cut parts: a negative value
+oversizes the joint before cutting, so the material the laser removes brings the fit back to snug. The right
+value depends on your laser and material, so start near your kerf width and fine-tune based on a test cut.
 
 ![Gaps between notches and fingers](resources/doc/gaps.png)
 
 An experimental option of adding a gap between the joint and the parts was added in version 1.2.
 Currently, the gap size will not always match the entered value and might be different on both parts
 if their overlap is not a square. Use at your own risk and experiment with different settings
-for a useful distance.
+for a useful distance. This is a standoff/air-gap setting unrelated to kerf compensation, and negative
+values are not supported (they are rejected rather than producing invalid geometry).
 
 ![Gaps between fingers and parts](resources/doc/gaps2.png)
 
