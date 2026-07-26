@@ -128,6 +128,11 @@ def createToolBody(body, slices, inputs, debug=False):
     scaleFactorX = (length + 2*gapToPart) / length
     scaleFactorY = (width + 2*gapToPart) / width
     scaleFactor = max(scaleFactorX, scaleFactorY)
+    epsilon = 0.00001 # avoid rounding issues with floats
+    if scaleFactor <= epsilon:
+        # A large enough negative gapToPart collapses or inverts the tool body - reject rather
+        # than pass invalid geometry on to the boolean cut.
+        return None
     transform = adsk.core.Matrix3D.create()
     transform.setWithArray([scaleFactor, 0,           0, 0,
                             0,           scaleFactor, 0, 0,
@@ -206,8 +211,10 @@ def createToolBodies(inputs):
         return False
 
     fingerToolBody = createToolBody(overlap, fingerDimensions, inputs)
-    coordinateSystem.transformToGlobalCoordinates(fingerToolBody)
     notchToolBody = createToolBody(overlap, notchDimensions, inputs)
+    if fingerToolBody is None or notchToolBody is None:
+        return False
+    coordinateSystem.transformToGlobalCoordinates(fingerToolBody)
     coordinateSystem.transformToGlobalCoordinates(notchToolBody)
     return fingerToolBody, notchToolBody
 
@@ -361,4 +368,45 @@ def defineToolBodyDimensions(size, inputs):
     fingerToolDimensions = [(notchStart + i*spacing - gapSize, notchSize + 2 * gapSize) for i in range(numNotches)]
     # The tool for cutting notches consists of all places where there are fingers or gaps (everything other than a notch).
     notchToolDimensions = [(fingerStart + i*spacing - gapSize, fingerSize + 2 * gapSize) for i in range(numFingers)]
+
+    # A negative gapSize (press-fit kerf compensation) shrinks each tool interval instead of
+    # growing it, which can pull an outermost interval's edge back past the true ends of the
+    # row (0 and size), leaving an uncut sliver of material at the row's true boundary - visible
+    # as a proud tab at open ends and at box corners alike.
+    #
+    # At a given end of the row, only ONE of the two tools needs to reach the true bound: the
+    # one that clears the boundary feature's footprint on the *mating* body (e.g. if a finger
+    # sits at the row's start, the notch tool must cut flush to x=0 there). The other tool's
+    # outermost interval legitimately starts partway into the row - at exactly that boundary
+    # feature's own size - and must NOT be extended, or it would cut the boundary feature away
+    # entirely. So we first determine which feature type occupies each end, then extend only
+    # the complementary tool. This is a no-op for positive gapSize, which already overshoots
+    # past the bound harmlessly.
+    def extendStartIfNeeded(dimensions):
+        if not dimensions:
+            return
+        start, length = dimensions[0]
+        if start > 0:
+            dimensions[0] = (0, length + start)
+
+    def extendEndIfNeeded(dimensions):
+        if not dimensions:
+            return
+        start, length = dimensions[-1]
+        end = start + length
+        if end < size:
+            dimensions[-1] = (start, size - start)
+
+    if fingerStart == 0:
+        extendStartIfNeeded(notchToolDimensions)
+    else:
+        extendStartIfNeeded(fingerToolDimensions)
+
+    lastFingerEnd = fingerStart + (numFingers - 1) * spacing + fingerSize
+    lastNotchEnd = notchStart + (numNotches - 1) * spacing + notchSize
+    if lastFingerEnd > lastNotchEnd:
+        extendEndIfNeeded(notchToolDimensions)
+    else:
+        extendEndIfNeeded(fingerToolDimensions)
+
     return fingerToolDimensions, notchToolDimensions
