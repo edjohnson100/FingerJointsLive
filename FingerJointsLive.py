@@ -27,6 +27,18 @@ command_id = 'FingerJointsLive_Launcher'
 preview_group_id = 'FingerJointsLive_Preview'
 undo_group_command_id = 'FingerJointsLive_UndoGroup'
 
+# Human-readable labels for the internal selection-target keys (body0/body1/direction/
+# extendSource/extendTargetFace), used for both the FJL_Select_* command's title bar and its
+# selection input's in-dialog label - Fusion shows the raw camelCase key otherwise (e.g.
+# "SELECT BODY0", "Select extendTargetFace"), which reads like an internal variable name.
+TARGET_LABELS = {
+    'body0': '1st Body/Bodies',
+    'body1': '2nd Body/Bodies',
+    'direction': 'Joint Direction',
+    'extendSource': 'Face to Extend',
+    'extendTargetFace': 'Target Face',
+}
+
 # Zero-arg callable currently pending execution inside the hidden undo-group command
 # (see _run_grouped). Only ever set/consumed synchronously within a single call stack.
 _pending_grouped_work = None
@@ -231,6 +243,8 @@ def apply_payload_settings(inputs, payload):
     """Copies the joint-parameter fields of an HTML payload onto a FingerJointFeatureInput."""
     inputs.dynamicSizeType = payload.get('dynamicSizeType', inputs.dynamicSizeType)
     inputs.placementType = payload.get('placementType', inputs.placementType)
+    inputs.jointType = payload.get('jointType', inputs.jointType)
+    inputs.reverseTaper = payload.get('reverseTaper', False)
     inputs.isNumberOfFingersFixed = payload.get('isNumberOfFingersFixed', False)
 
     if payload.get('fixedNumFingers'): inputs.fixedNumFingers = int(payload.get('fixedNumFingers'))
@@ -240,6 +254,7 @@ def apply_payload_settings(inputs, payload):
     if payload.get('minFingerSize'): inputs.minFingerSize.expression = payload.get('minFingerSize')
     if payload.get('gap'): inputs.gap.expression = payload.get('gap')
     if payload.get('gapToPart'): inputs.gapToPart.expression = payload.get('gapToPart')
+    if payload.get('dovetailAngle'): inputs.dovetailAngle.expression = payload.get('dovetailAngle')
 
 
 def preview_joints(payload):
@@ -501,7 +516,7 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             elif self.target == 'extendTargetFace':
                 prompt = 'Select the face to extend to, then click OK.'
 
-            selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {self.target}', prompt)
+            selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {TARGET_LABELS[self.target]}', prompt)
 
             if self.target == 'direction':
                 selInput.addSelectionFilter('LinearEdges')
@@ -564,7 +579,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
             html_args = adsk.core.HTMLEventArgs.cast(args)
             data = json.loads(html_args.data)
             action = data.get('action')
-            
+
             if action in ('select_body0', 'select_body1', 'select_direction'):
                 target = action.replace('select_', '')
                 cmd_def_id = f'FJL_Select_{target}'
@@ -650,6 +665,9 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 defaults_dict = {
                     'dynamicSizeType': defaults.dynamicSizeType,
                     'placementType': defaults.placementType,
+                    'jointType': defaults.jointType,
+                    'dovetailAngle': defaults.dovetailAngle.expression,
+                    'reverseTaper': defaults.reverseTaper,
                     'isNumberOfFingersFixed': defaults.isNumberOfFingersFixed,
                     'fixedNumFingers': defaults.fixedNumFingers,
                     'fixedNotchSize': defaults.fixedNotchSize.expression,
@@ -706,6 +724,9 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 defaults_dict = {
                     'dynamicSizeType': defaults.dynamicSizeType,
                     'placementType': defaults.placementType,
+                    'jointType': defaults.jointType,
+                    'dovetailAngle': defaults.dovetailAngle.expression,
+                    'reverseTaper': defaults.reverseTaper,
                     'isNumberOfFingersFixed': defaults.isNumberOfFingersFixed,
                     'fixedNumFingers': defaults.fixedNumFingers,
                     'fixedNotchSize': defaults.fixedNotchSize.expression,
@@ -839,7 +860,7 @@ def run(context):
             c_id = f'FJL_Select_{target}'
             cdef = ui.commandDefinitions.itemById(c_id)
             if cdef: cdef.deleteMe()
-            cdef = ui.commandDefinitions.addButtonDefinition(c_id, f'Select {target}', '')
+            cdef = ui.commandDefinitions.addButtonDefinition(c_id, f'Select {TARGET_LABELS[target]}', '')
             handler = SelectionCommandCreatedHandler(target)
             cdef.commandCreated.add(handler)
             handlers.append(handler)
