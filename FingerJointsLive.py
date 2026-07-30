@@ -1,5 +1,12 @@
-# Author: Florian Pommerening
-# Description: An Add-In for making finger joints.
+# FingerJointsLive
+# Author: Ed Johnson (Making With An EdJ)
+# A live, palette-based remix of Florian Pommerening's original Finger Joints
+# add-in (https://github.com/FlorianPommerening/FingerJoints) — his core
+# finger-joint math is still in here doing the heavy lifting, wrapped in a
+# persistent HTML palette with live preview, presets, theming, a Close Butt
+# Joint loop, full Through Dovetail joint support, and multi-body selection
+# (pick several 1st/2nd bodies at once and generate every resulting joint in
+# one pass instead of repeating the whole workflow per pair).
 
 # Select two overlapping bodies and a direction. The overlap is cut along the
 # direction multiple times resulting in the individual fingers/notches. We
