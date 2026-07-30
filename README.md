@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.2.1
+**Version:** 1.3.0
 
 **Author:** Ed Johnson (Making With An EdJ)
 
@@ -11,6 +11,20 @@ This "Live" version takes the core mathematical engine of Florian's original add
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ---
+## ✨ What's New in v1.3.0
+
+* **Through Dovetail joints:** A new Joint Type alongside the existing Box/Finger joints — cuts real angled dovetail pins/tails instead of straight-sided fingers. Set the **Dovetail Angle** (typical range 7–14°) and use the **Reverse Taper** checkbox if a joint doesn't interlock as expected — the correct direction depends on your model's specific geometry (corner vs. an inline splice joining two coplanar panels end-to-end, which body is selected first, etc.) and isn't something the add-in can reliably infer on its own, so it's a toggle rather than automatic.
+* **Manufacturing note:** a dovetail's taper varies across the panel's thickness, so the mating cut face isn't flat — this requires 3D printing or a 5-axis CNC setup; a laser cutter or 3-axis CNC cannot reproduce it. Dovetails are most useful for 3D-printed parts or for splicing two panels end-to-end when a single piece would be too large for your laser bed or stock, not as a general laser/CNC replacement for box joints.
+* **Friendlier selection dialogs:** The native "Select 1st Body," "Select 2nd Body," "Select Direction," etc. dialogs now show plain-language titles instead of raw internal names like `extendTargetFace`.
+* **Update Preset:** A new button overwrites the currently-selected preset with your current settings, so you no longer have to delete and re-save under the same name just to update one.
+* **Reset to Defaults confirmation:** Replaced the plain browser confirmation popup with a themed in-app dialog that matches the rest of the palette.
+* Existing presets and saved defaults keep working unchanged — they pick up the new Joint Type/Dovetail Angle/Reverse Taper fields at their Box-joint defaults automatically.
+
+## ✨ What's New in v1.2.2
+
+* **Toolbar polish:** The command button now shows a tool clip thumbnail and description in Fusion's toolbar tooltip.
+* The palette's sub-header now displays the running version number instead of a static tagline.
+
 ## ✨ What's New in v1.2.1
 
 * **Fixed:** A negative `Gap Between Fingers` value (used for laser kerf compensation on a tight/press fit) could leave a thin, uncut sliver of material right at the true ends of a finger/notch row — both at closed box corners and at open/interior joints (e.g. a shelf mortise-and-tenon). The outermost cut on each end of a row now always reaches the row's true boundary regardless of gap sign; positive gap values are unaffected.
