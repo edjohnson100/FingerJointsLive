@@ -34,6 +34,16 @@ command_id = 'FingerJointsLive_Launcher'
 preview_group_id = 'FingerJointsLive_Preview'
 undo_group_command_id = 'FingerJointsLive_UndoGroup'
 
+def _read_manifest_version():
+    manifest_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'FingerJointsLive.manifest')
+    try:
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            return json.load(f).get('version', '')
+    except Exception:
+        return ''
+
+ADDIN_VERSION = _read_manifest_version()
+
 # Human-readable labels for the internal selection-target keys (body0/body1/direction/
 # extendSource/extendTargetFace), used for both the FJL_Select_* command's title bar and its
 # selection input's in-dialog label - Fusion shows the raw camelCase key otherwise (e.g.
@@ -75,6 +85,47 @@ def load_presets_dict():
 
 def save_presets_dict(d):
     with open(PRESETS_FILE, 'w') as f: json.dump(d, f, indent=4)
+
+# Host-side store for user-imported/edited themes -- separate from the built-in
+# themes baked into resources/style.css. Per-machine, gitignored (same split as
+# GridfinityGeneratorPlus/LiveUtilities): survives a restart or a localStorage
+# wipe without polluting resources/, which holds only what ships with the add-in.
+IMPORTED_THEMES_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'imported_themes.json')
+
+def load_imported_themes():
+    if not os.path.exists(IMPORTED_THEMES_FILE):
+        return {}
+    try:
+        with open(IMPORTED_THEMES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_imported_theme(theme_id, theme_vars):
+    themes = load_imported_themes()
+    themes[theme_id] = theme_vars
+    with open(IMPORTED_THEMES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(themes, f, indent=2)
+
+def delete_imported_theme(theme_id):
+    themes = load_imported_themes()
+    if theme_id in themes:
+        del themes[theme_id]
+        with open(IMPORTED_THEMES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(themes, f, indent=2)
+
+def clear_imported_themes():
+    """Used by the Theme Manager's Factory Reset -- wipes every host-persisted
+    imported theme, not just localStorage, so a reset actually resets."""
+    if os.path.exists(IMPORTED_THEMES_FILE):
+        os.remove(IMPORTED_THEMES_FILE)
+
+def _themes_dialog_dir():
+    """Standard theme import/export dialog location: resources/themes/ if it
+    exists (shipped presets), else fall back to resources/."""
+    root = os.path.dirname(os.path.realpath(__file__))
+    themes_dir = os.path.join(root, 'resources', 'themes')
+    return themes_dir if os.path.isdir(themes_dir) else os.path.join(root, 'resources')
 
 def createBaseFeature(parentComponent, bRepBody, name):
     feature = parentComponent.features.baseFeatures.add()
@@ -690,6 +741,8 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 presets = load_presets_dict()
                 defaults_dict['presets'] = list(presets.keys())
                 defaults_dict['selectedPreset'] = ''
+                defaults_dict['imported_themes'] = load_imported_themes()
+                defaults_dict['addin_version'] = ADDIN_VERSION
                 palette = ui.palettes.itemById(palette_id)
                 if palette: palette.sendInfoToHTML('load_defaults', json.dumps(defaults_dict))
 
@@ -698,17 +751,32 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 inputs.theme = data.get('theme', 'default')
                 inputs.writeDefaults()
 
+            elif action == 'save_imported_theme':
+                theme_id = data.get('id')
+                theme_vars = data.get('vars')
+                if theme_id and isinstance(theme_vars, dict):
+                    save_imported_theme(theme_id, theme_vars)
+
+            elif action == 'remove_imported_theme':
+                theme_id = data.get('id')
+                if theme_id:
+                    delete_imported_theme(theme_id)
+
+            elif action == 'reset_imported_themes':
+                clear_imported_themes()
+
             elif action == 'import_file':
                 file_type = data.get('file_type')
                 dlg = ui.createFileDialog()
                 dlg.title = f"Import {file_type.upper()} Theme"
                 dlg.filter = f"{file_type.upper()} Files (*.{file_type})"
+                dlg.initialDirectory = _themes_dialog_dir()
                 if dlg.showOpen() == adsk.core.DialogResults.DialogOK:
                     try:
                         with open(dlg.filename, 'r', encoding='utf-8') as f:
                             content = f.read()
                         palette = ui.palettes.itemById(palette_id)
-                        if palette: 
+                        if palette:
                             palette.sendInfoToHTML('file_imported', json.dumps({'file_type': file_type, 'content': content}))
                     except Exception as e:
                         ui.messageBox(f"Error reading file:\n{e}")
@@ -720,6 +788,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 dlg = ui.createFileDialog()
                 dlg.title = f"Export {file_type.upper()} Theme"
                 dlg.filter = f"{file_type.upper()} Files (*.{file_type})"
+                dlg.initialDirectory = _themes_dialog_dir()
                 dlg.initialFilename = default_name
                 if dlg.showSave() == adsk.core.DialogResults.DialogOK:
                     try:
@@ -769,7 +838,9 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 presets = load_presets_dict()
                 defaults_dict['presets'] = list(presets.keys())
                 defaults_dict['selectedPreset'] = ''
-                
+                defaults_dict['imported_themes'] = load_imported_themes()
+                defaults_dict['addin_version'] = ADDIN_VERSION
+
                 palette = ui.palettes.itemById(palette_id)
                 if palette:
                     palette.sendInfoToHTML('load_defaults', json.dumps(defaults_dict))
