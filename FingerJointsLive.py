@@ -915,7 +915,10 @@ def run(context):
             res_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'resources/ui/command_button')
             cmdDef = ui.commandDefinitions.addButtonDefinition(command_id, 'Finger Joints Live', 'An updated, palette-based UI, add-in for creating finger joints (box joints) from the overlap of two bodies.', res_dir)
 
-            tool_clip_path = os.path.join(res_dir, 'FingerJointsLiveThumb.png')
+            # toolClip lives in the top-level resources/ folder, not the command
+            # button icon-set folder, matching the standardized location used
+            # across the fleet.
+            tool_clip_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'resources', 'toolClip.png')
             if os.path.exists(tool_clip_path):
                 cmdDef.toolClipFilename = tool_clip_path
             

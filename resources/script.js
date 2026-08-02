@@ -54,14 +54,7 @@ function generateFullCSS() {
         out += `}\n\n`;
         i++;
     }
-    let css = baseCSS;
-    if (css.includes('background-color: var(--bg-body);') && !css.includes('border: 2px solid var(--btn-primary)')) {
-        css = css.replace(
-            'background-color: var(--bg-body);',
-            'background-color: var(--bg-body); border: 2px solid var(--btn-primary);'
-        );
-    }
-    return out + css;
+    return out + baseCSS;
 }
 
 function updateThemeDropdown() {
@@ -284,7 +277,8 @@ function getPayload() {
         gapToPart: document.getElementById('gapToPart').value,
         collapsedSections: {
             buttjoint: document.getElementById('section-buttjoint').classList.contains('collapsed'),
-            config: document.getElementById('section-config').classList.contains('collapsed')
+            config: document.getElementById('section-config').classList.contains('collapsed'),
+            thememanager: document.getElementById('section-thememanager').classList.contains('collapsed')
         }
     };
 }
@@ -446,6 +440,7 @@ window.fusionJavaScriptHandler = {
                     const cs = defaults.collapsedSections;
                     document.getElementById('section-buttjoint').classList.toggle('collapsed', !!cs.buttjoint);
                     document.getElementById('section-config').classList.toggle('collapsed', !!cs.config);
+                    document.getElementById('section-thememanager').classList.toggle('collapsed', !!cs.thememanager);
                 }
 
                 if (defaults.presets) {

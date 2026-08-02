@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.3.0
+**Version:** 1.3.1
 
 **Author:** Ed Johnson (Making With An EdJ)
 
@@ -11,6 +11,11 @@ This "Live" version takes the core mathematical engine of Florian's original add
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ---
+## ✨ What's New in v1.3.1
+
+* **UI polish pass:** Removed the primary-color accent border around the palette body (added back in v1.0.1) for a cleaner look — this also drops the legacy-`style.css` auto-upgrade patch that used to re-add it to older exported theme files.
+* **Themes tab collapsible:** The Theme Manager section now collapses/expands like every other section in the palette, and remembers its state between sessions.
+
 ## ✨ What's New in v1.3.0
 
 * **Through Dovetail joints:** A new Joint Type alongside the existing Box/Finger joints — cuts real angled dovetail pins/tails instead of straight-sided fingers. Set the **Dovetail Angle** (typical range 7–14°) and use the **Reverse Taper** checkbox if a joint doesn't interlock as expected — the correct direction depends on your model's specific geometry (corner vs. an inline splice joining two coplanar panels end-to-end, which body is selected first, etc.) and isn't something the add-in can reliably infer on its own, so it's a toggle rather than automatic.

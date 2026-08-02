@@ -327,7 +327,7 @@
    heights against its actual container, so the themed background stops at
    content height and leaves the palette's native gray showing below it on a
    short page or a tall/undocked window. Same fix as GridfinityGeneratorPlus. */
-body { background-color: var(--bg-body); border: 2px solid var(--btn-primary); color: var(--text-main); font-family: var(--font-family); margin: 0; padding: 15px; font-size: var(--font-size-base); transition: background-color 0.3s, color 0.3s; min-height: 2160px; }
+body { background-color: var(--bg-body); color: var(--text-main); font-family: var(--font-family); margin: 0; padding: 15px; font-size: var(--font-size-base); transition: background-color 0.3s, color 0.3s; min-height: 2160px; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
 h2 { margin: 0 0 2px 0; font-size: calc(var(--font-size-base) + 1px); text-transform: uppercase; letter-spacing: 1px; }
 .sub-header { color: var(--text-sub); font-size: calc(var(--font-size-base) - 2px); font-style: italic; }
