@@ -1,7 +1,9 @@
+import math
+
 import adsk.core
 import adsk.fusion
 
-from .options import DynamicSizeType, PlacementType
+from .options import DynamicSizeType, JointType, PlacementType
 
 
 def findOrthogonalUnitVectors(z):
@@ -85,6 +87,214 @@ def createBox(x, y, z, length, width, height):
     return adsk.core.OrientedBoundingBox3D.create(centerPoint, lengthDirection, widthDirection, length, width, height)
 
 
+def _gapCompensationTransform(length, width, gapToPart, scaleX=True, scaleY=True):
+    """Scale-based approximation of a uniform gapToPart standoff (see createToolBody's comment
+    on why scaling is only exact when the intersection is square). scaleX/scaleY let a caller
+    exclude an axis, though nothing currently does - both dovetail tools use the same uniform
+    scale (see _finalizeDovetailToolBody) since the notch tool is built as the finger tool's
+    exact complement and an asymmetric per-axis scale would break that relationship."""
+    epsilon = 0.00001 # avoid rounding issues with floats
+    scaleFactorX = (length + 2*gapToPart) / length if scaleX else 1.0
+    scaleFactorY = (width + 2*gapToPart) / width if scaleY else 1.0
+    if scaleX and scaleY:
+        # Note that we have to scale in x and y direction with the same factor because the axes
+        # may not be aligned with the axis of the intersection.
+        scaleFactorX = scaleFactorY = max(scaleFactorX, scaleFactorY)
+    if (scaleX and scaleFactorX <= epsilon) or (scaleY and scaleFactorY <= epsilon):
+        # A large enough negative gapToPart collapses or inverts the tool body - reject rather
+        # than pass invalid geometry on to the boolean cut.
+        return None
+    transform = adsk.core.Matrix3D.create()
+    transform.setWithArray([scaleFactorX, 0,            0, 0,
+                            0,            scaleFactorY, 0, 0,
+                            0,            0,            1, 0,
+                            0,            0,            0, 1])
+    return transform
+
+
+def _halfSpaceBox(pivotPoint, normal, size):
+    """A large box (side length `size`, which the caller must size larger than whatever this
+    will be intersected with) whose near face is the plane through pivotPoint perpendicular to
+    normal, extending away from pivotPoint in the +normal direction. Used to trim a slice's flat
+    Z-boundary into an angled dovetail wall via boolean intersection."""
+    n = normal.copy()
+    n.normalize()
+    helper = adsk.core.Vector3D.create(1, 0, 0)
+    if abs(helper.dotProduct(n)) > 0.9:
+        helper = adsk.core.Vector3D.create(0, 1, 0)
+    u = n.crossProduct(helper)
+    u.normalize()
+    v = n.crossProduct(u)
+    v.normalize()
+    # u x v == n, so an OrientedBoundingBox3D built from (u, v) has its "height" axis along
+    # normal - matching createBox()'s (x, y) -> z convention above.
+    center = pivotPoint.copy()
+    offset = n.copy()
+    offset.scaleBy(size / 2)
+    center.translateBy(offset)
+    obb = adsk.core.OrientedBoundingBox3D.create(center, u, v, size, size, size)
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    return temporaryBRepManager.createBox(obb)
+
+
+def _dovetailCombGeometry(body, inputs):
+    """Shared setup for the dovetail comb builders: the depth axis/extent, row extent, and
+    angle trig, all derived once from the (already-local-coordinates) overlap body so the
+    finger comb and the full row slab agree exactly on bounds."""
+    bb = body.boundingBox
+    minx, miny, minz = bb.minPoint.asArray()
+    maxx, maxy, maxz = bb.maxPoint.asArray()
+    cx = (minx + maxx) / 2
+    cy = (miny + maxy) / 2
+    slack = 1
+    length = maxx - minx + slack
+    width = maxy - miny + slack
+    size = maxz - minz
+
+    depthIsX = (maxx - minx) <= (maxy - miny)
+    if depthIsX:
+        Amin, Amax = minx, maxx
+        wCenter = cy
+    else:
+        Amin, Amax = miny, maxy
+        wCenter = cx
+
+    angle = inputs.dovetailAngle.value
+    # reverseTaper swaps which face of the depth axis (Amin vs. Amax) ends up wide vs. narrow.
+    # This needs BOTH the wedge normal's sign flipped AND the taper's anchor point moved from
+    # Amin to Amax - sign alone is not enough. The working (non-reversed) formula keeps the
+    # wedge's own "-sinAngle" term negative while anchoring at Amin; naively flipping just
+    # sinAngle's sign while leaving the anchor at Amin cancels that back to +sinAngle with an
+    # Amin anchor, which is EXACTLY the very first no-op bug this file had (a wedge that only
+    # ever trims the oversized slack region and never touches the true footprint) - confirmed
+    # by hand, this is why that attempt visibly "squared up" the joint instead of reversing it.
+    # Moving the anchor to Amax at the same time makes it a real (non-degenerate), genuinely
+    # reversed cut instead. This is a single global choice, so it flips ALL teeth in the comb
+    # together - since the notch tool is always the finger comb's exact complement (see
+    # createToolBodies), flipping it still produces fully mating, interlocking geometry; it
+    # only mirrors which face looks wide vs. narrow. The "right" direction depends on physical
+    # context (corner vs. inline splice, which body is body0/body1, direction-edge orientation)
+    # that the geometry can't infer, hence a user-facing toggle rather than a hardcoded choice.
+    taperSign = -1 if inputs.reverseTaper else 1
+    Aref = Amax if inputs.reverseTaper else Amin
+    return {
+        'minz': minz, 'cx': cx, 'cy': cy, 'length': length, 'width': width, 'size': size,
+        'depthIsX': depthIsX, 'Amin': Amin, 'Amax': Amax, 'wCenter': wCenter, 'Aref': Aref,
+        'tanAngle': math.tan(angle), 'cosAngle': math.cos(angle),
+        'sinAngle': math.sin(angle) * taperSign,
+    }
+
+
+def _buildDovetailComb(slices, geom):
+    """Builds the raw tapered comb (union of wedge-trimmed slices) for one dimension list -
+    NOT yet intersected with the real overlap body and with no gapToPart applied. Every tooth
+    is at its nominal (box-joint) width at the depth axis's anchor face (geom['Aref'], normally
+    Amin but Amax when inputs.reverseTaper is set) and narrows towards the opposite face, like
+    a physical dovetail router bit narrowing from shank to tip. Returns None if a
+    self-intersection guard trips (see below).
+
+    This builds ONLY the fingerToolDimensions-style comb. createToolBodies never calls this a
+    second time for notchToolDimensions with some mirrored/flipped variant - that was tried
+    (twice) and is mathematically impossible to get right this way: a wall trimmed via a
+    half-space wedge is only a *real* cut (not a no-op that just trims the oversized slack
+    region and leaves the true footprint untouched) if its trajectory increases with depth for
+    a start wall, or decreases for an end wall - that's forced, not a convention. But two combs
+    built independently need their shared boundary walls to be numerically IDENTICAL functions
+    of depth to mate, and an increasing function can't equal a decreasing one except at one
+    depth. So instead, createToolBodies builds the notch comb as this comb's exact geometric
+    complement within the full row slab - see createToolBodies for why that's the only
+    approach that guarantees matching walls by construction."""
+    minz, cx, cy = geom['minz'], geom['cx'], geom['cy']
+    length, width, size = geom['length'], geom['width'], geom['size']
+    depthIsX, Amin, wCenter, Aref = geom['depthIsX'], geom['Amin'], geom['wCenter'], geom['Aref']
+    tanAngle, cosAngle, sinAngle = geom['tanAngle'], geom['cosAngle'], geom['sinAngle']
+    depthExtent = geom['Amax'] - Amin
+
+    # Sanity-check: each cut interval's own two walls converge as depth increases from Amin to
+    # Amax (that convergence is what makes the cut a real, non-degenerate taper rather than a
+    # no-op - see this function's docstring). If a cut's nominal thickness is narrower than
+    # twice the maximum convergence (depthExtent * tanAngle per side), its two walls cross
+    # before reaching the far face - a self-intersecting/bowtie cut, which would also pinch the
+    # complementary tooth (built from this comb in createToolBodies) to zero width there.
+    epsilon = 0.00001
+    for (sliceCenterStart, sliceThickness) in slices:
+        if sliceThickness - 2 * depthExtent * tanAngle <= epsilon:
+            return None
+
+    def makePoint(aVal, zVal):
+        if depthIsX:
+            return adsk.core.Point3D.create(aVal, wCenter, zVal)
+        else:
+            return adsk.core.Point3D.create(wCenter, aVal, zVal)
+
+    if depthIsX:
+        nStart = adsk.core.Vector3D.create(-sinAngle, 0, cosAngle)
+        nEnd = adsk.core.Vector3D.create(-sinAngle, 0, -cosAngle)
+    else:
+        nStart = adsk.core.Vector3D.create(0, -sinAngle, cosAngle)
+        nEnd = adsk.core.Vector3D.create(0, -sinAngle, -cosAngle)
+
+    bigSize = 20 * (length + width + size)
+
+    # A tapered wall, unlike createToolBody's flat ones, drifts away from the row's true
+    # boundary (Z = minz or minz+size) as depth moves away from Aref - if we tapered the
+    # outermost teeth's true-edge wall too, it would leave either a proud sliver or an
+    # undercut notch right at the panel's real edge. Instead, extend just that wall's
+    # reference position outward by more than the taper can ever drift (plus a small buffer),
+    # so the tapered wall stays outside the panel at every depth and the final intersection
+    # with the real overlap body clips it back to a clean, untapered edge.
+    edgeEpsilon = 0.0001
+    edgeBuffer = depthExtent * tanAngle + 0.1
+    numSlices = len(slices)
+
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    targetBody = None
+    for i, (sliceCenterStart, sliceThickness) in enumerate(slices):
+        start = minz + sliceCenterStart
+        end = start + sliceThickness
+        if i == 0 and sliceCenterStart <= edgeEpsilon:
+            start -= edgeBuffer
+        if i == numSlices - 1 and sliceCenterStart + sliceThickness >= size - edgeEpsilon:
+            end += edgeBuffer
+
+        box = createBox(cx, cy, (start + end) / 2, length, width, end - start)
+        sliceBody = temporaryBRepManager.createBox(box)
+
+        pivotStart = makePoint(Aref, start)
+        startWedge = _halfSpaceBox(pivotStart, nStart, bigSize)
+        temporaryBRepManager.booleanOperation(sliceBody, startWedge, adsk.fusion.BooleanTypes.IntersectionBooleanType)
+
+        pivotEnd = makePoint(Aref, end)
+        endWedge = _halfSpaceBox(pivotEnd, nEnd, bigSize)
+        temporaryBRepManager.booleanOperation(sliceBody, endWedge, adsk.fusion.BooleanTypes.IntersectionBooleanType)
+
+        if targetBody is None:
+            targetBody = sliceBody
+        else:
+            temporaryBRepManager.booleanOperation(targetBody, sliceBody, adsk.fusion.BooleanTypes.UnionBooleanType)
+
+    return targetBody
+
+
+def _finalizeDovetailToolBody(rawComb, body, inputs, geom):
+    """Shared final steps for both the finger comb and its notch complement: intersect with
+    the real overlap body (clipping oversized slack and the edge-buffer overshoot down to the
+    panel's true footprint) and apply the gapToPart standoff. Both tools get the same uniform
+    bounding-box scale (not a wedge-offset) for gapToPart - see createToolBodies for why: the
+    notch comb only exists as this comb's complement, so anything baked asymmetrically into one
+    comb's wedge placement would break that complement relationship instead of adding a clean
+    standoff to both."""
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    temporaryBRepManager.booleanOperation(rawComb, body, adsk.fusion.BooleanTypes.IntersectionBooleanType)
+
+    gapToPart = inputs.gapToPart.value
+    transform = _gapCompensationTransform(geom['length'], geom['width'], gapToPart)
+    if transform is None:
+        return None
+    temporaryBRepManager.transform(rawComb, transform)
+    return rawComb
+
+
 def createToolBody(body, slices, inputs, debug=False):
     bb = body.boundingBox
     minx, miny, minz = bb.minPoint.asArray()
@@ -122,22 +332,11 @@ def createToolBody(body, slices, inputs, debug=False):
 
     # Scale up tool body, so its length and width are increased by the gap we want to leave to the other part.
     # The correct way to do so would be to compute an offset. Scaling works if the intersection is a square but
-    # will otherwise have a too large gap on one side. Note that we have to scale in x and y direction with the
-    # same factor because the axes may not be aligned with the axis of the intersection.
+    # will otherwise have a too large gap on one side.
     gapToPart = inputs.gapToPart.value
-    scaleFactorX = (length + 2*gapToPart) / length
-    scaleFactorY = (width + 2*gapToPart) / width
-    scaleFactor = max(scaleFactorX, scaleFactorY)
-    epsilon = 0.00001 # avoid rounding issues with floats
-    if scaleFactor <= epsilon:
-        # A large enough negative gapToPart collapses or inverts the tool body - reject rather
-        # than pass invalid geometry on to the boolean cut.
+    transform = _gapCompensationTransform(length, width, gapToPart)
+    if transform is None:
         return None
-    transform = adsk.core.Matrix3D.create()
-    transform.setWithArray([scaleFactor, 0,           0, 0,
-                            0,           scaleFactor, 0, 0,
-                            0,           0,           1, 0,
-                            0,           0,           0, 1])
     temporaryBRepManager.transform(targetBody, transform)
 
     return targetBody
@@ -210,8 +409,29 @@ def createToolBodies(inputs):
     if fingerDimensions is None or notchDimensions is None:
         return False
 
-    fingerToolBody = createToolBody(overlap, fingerDimensions, inputs)
-    notchToolBody = createToolBody(overlap, notchDimensions, inputs)
+    if inputs.jointType == JointType.DOVETAIL:
+        geom = _dovetailCombGeometry(overlap, inputs)
+        fingerRawComb = _buildDovetailComb(fingerDimensions, geom)
+        if fingerRawComb is None:
+            return False
+        # notchToolBody is built as fingerRawComb's exact geometric complement within a slab
+        # spanning the full row, rather than an independently-derived tapered comb of its own -
+        # see _buildDovetailComb's docstring for why deriving it independently (even with
+        # mirrored/flipped wedge formulas) cannot produce walls that actually mate. Must happen
+        # before fingerRawComb is finalized below (which intersects it with the real overlap
+        # and scales it for gapToPart) - the complement needs the untouched raw comb so both
+        # tools end up sharing identical boundary walls.
+        tempBRep = adsk.fusion.TemporaryBRepManager.get()
+        fullSlabBox = createBox(geom['cx'], geom['cy'], geom['minz'] + geom['size'] / 2,
+                                 geom['length'], geom['width'], geom['size'])
+        notchRawComb = tempBRep.createBox(fullSlabBox)
+        tempBRep.booleanOperation(notchRawComb, fingerRawComb, adsk.fusion.BooleanTypes.DifferenceBooleanType)
+
+        fingerToolBody = _finalizeDovetailToolBody(fingerRawComb, overlap, inputs, geom)
+        notchToolBody = _finalizeDovetailToolBody(notchRawComb, overlap, inputs, geom)
+    else:
+        fingerToolBody = createToolBody(overlap, fingerDimensions, inputs)
+        notchToolBody = createToolBody(overlap, notchDimensions, inputs)
     if fingerToolBody is None or notchToolBody is None:
         return False
     coordinateSystem.transformToGlobalCoordinates(fingerToolBody)

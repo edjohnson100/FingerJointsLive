@@ -16,9 +16,18 @@ class PlacementType:
     SAME_NUMBER_START_FINGER = 'same number of fingers and notches (start with finger)'
     SAME_NUMBER_START_NOTCH = 'same number of fingers and notches (start with notch)'
 
+class JointType:
+    BOX = 'box'
+    DOVETAIL = 'through dovetail'
+    # Half-blind dovetails are a deferred follow-on; any shoulder-depth-style
+    # fields they need attach here as new additive values, not a rework of this enum.
+
 class FusionExpression(object):
-    def __init__(self, expression):
+    def __init__(self, expression, unitType=None):
+        # unitType defaults to the design's length units (e.g. "mm"); pass "deg"
+        # for angle expressions like dovetailAngle so validation checks the right dimension.
         self._expression = expression
+        self._unitType = unitType
 
     @property
     def expression(self):
@@ -31,12 +40,14 @@ class FusionExpression(object):
     @property
     def value(self):
         unitsManager = adsk.core.Application.get().activeProduct.unitsManager
-        return unitsManager.evaluateExpression(self._expression)
+        unitType = self._unitType or unitsManager.defaultLengthUnits
+        return unitsManager.evaluateExpression(self._expression, unitType)
 
     @property
     def isValid(self):
         unitsManager = adsk.core.Application.get().activeProduct.unitsManager
-        return unitsManager.isValidExpression(self._expression, unitsManager.defaultLengthUnits)
+        unitType = self._unitType or unitsManager.defaultLengthUnits
+        return unitsManager.isValidExpression(self._expression, unitType)
 
 
 # Fusion distinguishes three types of parameters:
@@ -56,7 +67,14 @@ class FingerJointFeatureInput(object):
         # Settings
         self.dynamicSizeType = DynamicSizeType.EQUAL_NOTCH_AND_FINGER_SIZE
         self.placementType = PlacementType.FINGERS_OUTSIDE
+        self.jointType = JointType.BOX
         # Values
+        self.dovetailAngle = FusionExpression("10 deg", unitType="deg")
+        # Which face of the taper's depth axis ends up wide vs. narrow. The "right" direction
+        # depends on the joint's physical context (corner vs. inline splice, which body is
+        # body0/body1, direction-edge orientation) - not something the geometry can infer, so
+        # it's a user-facing toggle rather than a hardcoded sign.
+        self.reverseTaper = False
         self.isNumberOfFingersFixed = False
         self.fixedFingerSize = FusionExpression("20 mm")
         self.fixedNotchSize = FusionExpression("20 mm")
@@ -80,6 +98,9 @@ class FingerJointFeatureInput(object):
         defaultData = {
             'dynamicSizeType': self.dynamicSizeType,
             'placementType': self.placementType,
+            'jointType': self.jointType,
+            'dovetailAngle': self.dovetailAngle.expression,
+            'reverseTaper': self.reverseTaper,
             'isNumberOfFingersFixed': self.isNumberOfFingersFixed,
             'fixedFingerSize': self.fixedFingerSize.expression,
             'fixedNotchSize': self.fixedNotchSize.expression,
@@ -101,8 +122,8 @@ class FingerJointFeatureInput(object):
             json.dump(defaultData, json_file, ensure_ascii=False)
     
     def readDefaults(self):
-        def expressionOrDefault(value, default):
-            expression = FusionExpression(value)
+        def expressionOrDefault(value, default, unitType=None):
+            expression = FusionExpression(value, unitType=unitType)
             if value and expression.isValid:
                 return expression
             else:
@@ -120,6 +141,9 @@ class FingerJointFeatureInput(object):
 
         self.dynamicSizeType = defaultData.get('dynamicSizeType', self.dynamicSizeType)
         self.placementType = defaultData.get('placementType', self.placementType)
+        self.jointType = defaultData.get('jointType', self.jointType)
+        self.dovetailAngle = expressionOrDefault(defaultData.get('dovetailAngle'), self.dovetailAngle, unitType="deg")
+        self.reverseTaper = defaultData.get('reverseTaper', self.reverseTaper)
         self.isNumberOfFingersFixed = defaultData.get('isNumberOfFingersFixed', self.isNumberOfFingersFixed)
         self.fixedFingerSize = expressionOrDefault(defaultData.get('fixedFingerSize'), self.fixedFingerSize)
         self.fixedNotchSize = expressionOrDefault(defaultData.get('fixedNotchSize'), self.fixedNotchSize)
