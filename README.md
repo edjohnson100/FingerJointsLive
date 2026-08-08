@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.3.1
+**Version:** 1.3.2
 
 **Author:** Ed Johnson (Making With An EdJ)
 
@@ -11,6 +11,11 @@ This "Live" version takes the core mathematical engine of Florian's original add
 <img src="FingerJointsLiveAppIcon.png" width="300">
 
 ---
+## ✨ What's New in v1.3.2
+
+* **Version footer:** The palette now shows a name/version footer at the bottom of every tab, matching the rest of Ed's add-in fleet.
+* **Accessibility (WCAG):** Button text colors are now computed per-theme for contrast instead of a hardcoded white — every bundled theme keeps legible button text. Every button, dropdown, and collapsible section header (Configuration, Close Butt Joint, Theme Manager) now shows a visible focus ring when navigating with Tab, and those section headers are keyboard-reachable for the first time. The Remove Selected Theme/Factory Reset buttons and the modal backdrop now use theme-aware colors instead of a fixed value.
+
 ## ✨ What's New in v1.3.1
 
 * **UI polish pass:** Removed the primary-color accent border around the palette body (added back in v1.0.1) for a cleaner look — this also drops the legacy-`style.css` auto-upgrade patch that used to re-add it to older exported theme files.
