@@ -15,7 +15,7 @@
             <h2>Finger Joints Live</h2>
             <div id="versionTag" class="sub-header"></div>
         </div>
-        <select id="themeSelect" onchange="changeTheme()" style="width: auto; height: 28px; font-size: 11px; padding: 2px 5px;">
+        <select id="themeSelect" onchange="changeTheme()" style="width: auto; height: 28px; font-size: calc(var(--font-size-base) - 2px); padding: 2px 5px;">
             <option value="default">Default Light</option>
             <!-- Options injected dynamically from style.css -->
         </select>
@@ -30,8 +30,8 @@
     <div id="tab-selections" class="tab-content active">
         
         <div class="controls-bar" style="justify-content: flex-end; margin-bottom: 5px;">
-            <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="showHelp()" title="Show Quick Help">Help</button>
-            <button class="action-btn" style="width: auto; font-size: 11px; padding: 2px 8px;" onclick="sendAction('clear_selections')" title="Clear selected bodies">Clear Picks</button>
+            <button class="action-btn" style="width: auto; font-size: calc(var(--font-size-base) - 2px); padding: 2px 8px;" onclick="showHelp()" title="Show Quick Help">Help</button>
+            <button class="action-btn" style="width: auto; font-size: calc(var(--font-size-base) - 2px); padding: 2px 8px;" onclick="sendAction('clear_selections')" title="Clear selected bodies">Clear Picks</button>
         </div>
 
         <div class="data-container" style="margin-bottom: 15px;">
@@ -84,7 +84,7 @@
                     <div class="row-label" title="Which face of the joint ends up wide vs. narrow. A corner dovetail and an inline splice (joining two coplanar panels end-to-end) typically need opposite settings for the teeth to interlock - if a dovetail doesn't assemble, try flipping this.">Reverse Taper</div>
                     <div class="row-controls" style="display: flex; align-items: center; gap: 6px;">
                         <input type="checkbox" id="reverseTaper" onchange="autoPreview()" style="width: auto;">
-                        <span style="font-size: 11px; font-weight: normal; color: var(--text-sub);">try for inline joints</span>
+                        <span style="font-size: calc(var(--font-size-base) - 2px); font-weight: normal; color: var(--text-sub);">try for inline joints</span>
                     </div>
                 </div>
 
@@ -167,8 +167,8 @@
                     </div>
                 </div>
                 <details style="margin: 4px 0 0;">
-                    <summary style="font-size: 11px; color: var(--text-sub); cursor: pointer;">How Gap Between Fingers &amp; Gap To Part work</summary>
-                    <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
+                    <summary style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); cursor: pointer;">How Gap Between Fingers &amp; Gap To Part work</summary>
+                    <p style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); margin: 4px 0 0;">
                         Gap Between Fingers also doubles as kerf compensation: a negative value oversizes the joint before cutting so the laser's kerf brings it back to a snug fit. The right value depends on your laser and material — start near your kerf width and adjust based on a test cut. Gap To Part is unrelated (a standoff gap, not kerf) and does not accept negative values.
                     </p>
                 </details>
@@ -182,7 +182,7 @@
             </div>
             <div class="section-content data-container">
                 <button class="btn-primary" onclick="sendAction('extend_loop_start')">Extend Butt Joints (Loop)</button>
-                <p style="font-size: 11px; color: var(--text-sub); margin: 4px 0 0;">
+                <p style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); margin: 4px 0 0;">
                     Repeatedly prompts for an edge/corner/face to extend, then the target face to extend to.
                     Click Cancel on either prompt to stop.
                 </p>
@@ -216,7 +216,7 @@
                         </select>
                     </div>
                 </div>
-                <p style="font-size: 12px; margin-top: 0; color: var(--text-sub);">Import custom themes exported from Theme Designer, or export your current active theme.</p>
+                <p style="font-size: calc(var(--font-size-base) - 1px); margin-top: 0; color: var(--text-sub);">Import custom themes exported from Theme Designer, or export your current active theme.</p>
                 <div class="create-grid">
                     <button class="btn-primary" onclick="requestImport('css')">📥 Import style.css</button>
                     <button class="btn-primary" onclick="requestExport('css')">📤 Export style.css</button>
@@ -235,7 +235,7 @@
     <div id="helpModal" class="modal-overlay" onclick="hideHelp(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Quick Help</h3>
-            <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: 13px;">
+            <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: var(--font-size-base);">
                 <ul style="padding-left: 20px; margin: 0;">
                     <li style="margin-bottom: 8px;"><strong>1st Body/Bodies:</strong> Select one or multiple bodies where the <em>fingers</em> will be placed.</li>
                     <li style="margin-bottom: 8px;"><strong>2nd Body/Bodies:</strong> Select one or multiple bodies where the <em>notches</em> will be placed.</li>
@@ -252,7 +252,7 @@
     <div id="resetConfirmModal" class="modal-overlay" onclick="hideResetConfirm(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <h3>Reset to Defaults?</h3>
-            <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: 13px;">
+            <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: var(--font-size-base);">
                 This resets all joint parameters to their factory defaults. Saved presets and your current body/direction selections are not affected.
             </div>
             <div class="modal-actions" style="margin-top: 15px;">
