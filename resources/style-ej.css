@@ -21,8 +21,10 @@
     --tab-active-text: #0078d4;
     --btn-primary: #0078d4;
     --btn-primary-hover: #106ebe;
+    --btn-primary-text: #ffffff;
     --btn-success: #28a745;
     --btn-success-hover: #218838;
+    --btn-success-text: #000000;
     --btn-secondary: #e0e0e0;
     --btn-secondary-hover: #d0d0d0;
     --btn-secondary-text: #333333;
@@ -32,6 +34,9 @@
     --status-error-text: #721c24;
     --status-info-bg: #cce5ff;
     --status-info-text: #004085;
+    --focus-ring: #0078d4;
+    --text-danger: #721c24;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 2. Classic Dark */
@@ -57,8 +62,10 @@
     --tab-active-text: #4cc9f0;
     --btn-primary: #0069d9;
     --btn-primary-hover: #0056b3;
+    --btn-primary-text: #ffffff;
     --btn-success: #1e7e34;
     --btn-success-hover: #155724;
+    --btn-success-text: #ffffff;
     --btn-secondary: #444444;
     --btn-secondary-hover: #555555;
     --btn-secondary-text: #ffffff;
@@ -68,6 +75,9 @@
     --status-error-text: #f8d7da;
     --status-info-bg: #1d364d;
     --status-info-text: #cce5ff;
+    --focus-ring: #4cc9f0;
+    --text-danger: #f8d7da;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 3. Ocean */
@@ -93,8 +103,10 @@
     --tab-active-text: #38bdf8;
     --btn-primary: #0ea5e9;
     --btn-primary-hover: #0284c7;
+    --btn-primary-text: #000000;
     --btn-success: #10b981;
     --btn-success-hover: #059669;
+    --btn-success-text: #000000;
     --btn-secondary: #334155;
     --btn-secondary-hover: #475569;
     --btn-secondary-text: #f8fafc;
@@ -104,6 +116,9 @@
     --status-error-text: #fecaca;
     --status-info-bg: #1e3a8a;
     --status-info-text: #bfdbfe;
+    --focus-ring: #38bdf8;
+    --text-danger: #fecaca;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 4. Hacker */
@@ -129,8 +144,10 @@
     --tab-active-text: #00ff00;
     --btn-primary: #008800;
     --btn-primary-hover: #00aa00;
+    --btn-primary-text: #000000;
     --btn-success: #006600;
     --btn-success-hover: #008800;
+    --btn-success-text: #ffffff;
     --btn-secondary: #003300;
     --btn-secondary-hover: #005500;
     --btn-secondary-text: #00ff00;
@@ -140,6 +157,9 @@
     --status-error-text: #ff0000;
     --status-info-bg: #001133;
     --status-info-text: #0088ff;
+    --focus-ring: #00ff00;
+    --text-danger: #ff0000;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 5. Solarized Dark */
@@ -165,8 +185,10 @@
     --tab-active-text: #2aa198;
     --btn-primary: #268bd2;
     --btn-primary-hover: #2aa198;
+    --btn-primary-text: #000000;
     --btn-success: #859900;
     --btn-success-hover: #738a00;
+    --btn-success-text: #000000;
     --btn-secondary: #1a4b5c;
     --btn-secondary-hover: #0e4a5c;
     --btn-secondary-text: #93a1a1;
@@ -176,6 +198,9 @@
     --status-error-text: #dc322f;
     --status-info-bg: #073642;
     --status-info-text: #268bd2;
+    --focus-ring: #2aa198;
+    --text-danger: #dc322f;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 6. Gruvbox Light */
@@ -201,8 +226,10 @@
     --tab-active-text: #076678;
     --btn-primary: #076678;
     --btn-primary-hover: #458588;
+    --btn-primary-text: #ffffff;
     --btn-success: #79740e;
     --btn-success-hover: #98971a;
+    --btn-success-text: #000000;
     --btn-secondary: #d5c4a1;
     --btn-secondary-hover: #bdae93;
     --btn-secondary-text: #3c3836;
@@ -212,6 +239,9 @@
     --status-error-text: #9d0006;
     --status-info-bg: #ebdbb2;
     --status-info-text: #076678;
+    --focus-ring: #076678;
+    --text-danger: #9d0006;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 7. Warm Sepia */
@@ -237,8 +267,10 @@
     --tab-active-text: #d97736;
     --btn-primary: #8c6b4a;
     --btn-primary-hover: #75573a;
+    --btn-primary-text: #ffffff;
     --btn-success: #6b8e23;
     --btn-success-hover: #556b2f;
+    --btn-success-text: #ffffff;
     --btn-secondary: #eadecc;
     --btn-secondary-hover: #dfd2bc;
     --btn-secondary-text: #433422;
@@ -248,6 +280,9 @@
     --status-error-text: #8b0000;
     --status-info-bg: #dcece8;
     --status-info-text: #2f4f4f;
+    --focus-ring: #d97736;
+    --text-danger: #8b0000;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 8. Solarized Light */
@@ -273,8 +308,10 @@
     --tab-active-text: #268bd2;
     --btn-primary: #268bd2;
     --btn-primary-hover: #2aa198;
+    --btn-primary-text: #000000;
     --btn-success: #859900;
     --btn-success-hover: #738a00;
+    --btn-success-text: #000000;
     --btn-secondary: #eee8d5;
     --btn-secondary-hover: #e4ddc4;
     --btn-secondary-text: #586e75;
@@ -284,6 +321,9 @@
     --status-error-text: #dc322f;
     --status-info-bg: #eee8d5;
     --status-info-text: #268bd2;
+    --focus-ring: #268bd2;
+    --text-danger: #dc322f;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 /* 9. Hot Pink */
@@ -309,8 +349,10 @@
     --tab-active-text: #0078d4;
     --btn-primary: #e401dd;
     --btn-primary-hover: #bc10ad;
+    --btn-primary-text: #ffffff;
     --btn-success: #29a6a8;
     --btn-success-hover: #218687;
+    --btn-success-text: #000000;
     --btn-secondary: #e0e0e0;
     --btn-secondary-hover: #d0d0d0;
     --btn-secondary-text: #333333;
@@ -320,6 +362,9 @@
     --status-error-text: #721c24;
     --status-info-bg: #feffcc;
     --status-info-text: #828500;
+    --focus-ring: #0078d4;
+    --text-danger: #721c24;
+    --overlay-bg: rgba(0,0,0,0.6);
 }
 
 body { background-color: var(--bg-body); color: var(--text-main); font-family: var(--font-family); margin: 0; padding: 15px; font-size: var(--font-size-base); transition: background-color 0.3s, color 0.3s; }
@@ -360,16 +405,30 @@ h2 { margin: 0 0 2px 0; font-size: calc(var(--font-size-base) + 1px); text-trans
 
 /* BUTTONS */
 button { border: none; padding: 8px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; width: 100%; box-sizing: border-box; }
-.btn-primary { background: var(--btn-primary); color: white; }
+.btn-primary { background: var(--btn-primary); color: var(--btn-primary-text, white); }
 .btn-primary:hover { background: var(--btn-primary-hover); }
-.btn-success { background: var(--btn-success); color: white; border-bottom: 3px solid rgba(0,0,0,0.2); }
+.btn-success { background: var(--btn-success); color: var(--btn-success-text, white); border-bottom: 3px solid rgba(0,0,0,0.2); }
 .btn-success:hover { background: var(--btn-success-hover); }
 .btn-secondary { background: var(--btn-secondary); color: var(--btn-secondary-text); }
 .btn-secondary:hover { background: var(--btn-secondary-hover); }
-.icon-btn { background: var(--btn-primary); color: white; padding: 4px 10px; font-size: calc(var(--font-size-base) - 1px); width: auto; }
+.icon-btn { background: var(--btn-primary); color: var(--btn-primary-text, white); padding: 4px 10px; font-size: calc(var(--font-size-base) - 1px); width: auto; }
 .action-btn { width: 32px; background: var(--row-bg); border: 1px solid var(--border-color); color: var(--text-sub); display: inline-flex; justify-content: center; align-items: center; padding: 4px; margin-left: 2px; }
 .action-btn:hover { background: var(--row-hover); color: var(--text-main); }
-.del-btn:hover { color: #d9534f; }
+.del-btn:hover { color: var(--text-danger, #d9534f); }
+
+/* FOCUS (keyboard-only) */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+.section-header:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--focus-ring, #0078d4);
+    outline-offset: 2px;
+}
+.section-header:focus-visible {
+    outline-offset: -2px;
+}
 
 /* INPUTS */
 input[type="text"], input[type="number"], select, textarea { background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 6px; border-radius: 3px; width: 100%; box-sizing: border-box; font-family: inherit; }
@@ -447,7 +506,7 @@ input:checked + .theme-slider:before { transform: translateX(16px); }
 .switch input:checked + .theme-slider { background-color: var(--btn-success); }
 
 /* MODAL */
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-bg, rgba(0,0,0,0.6)); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
 .modal-content { background: var(--row-bg); padding: 20px; border-radius: 8px; width: 85%; max-width: 300px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 10px; }
 .modal-content h3 { margin: 0 0 5px 0; font-size: calc(var(--font-size-base) + 1px); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
 .modal-label { font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); font-weight: bold; margin-bottom: -5px; }
@@ -455,5 +514,16 @@ input:checked + .theme-slider:before { transform: translateX(16px); }
 .modal-btn { flex: 1; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .btn-cancel { background: var(--btn-secondary); color: var(--btn-secondary-text); }
 .btn-cancel:hover { background: var(--btn-secondary-hover); }
-.btn-save { background: var(--btn-primary); color: white; }
+.btn-save { background: var(--btn-primary); color: var(--btn-primary-text, white); }
 .btn-save:hover { background: var(--btn-primary-hover); }
+
+/* FOOTER */
+.version-footer {
+    text-align: center;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-sub);
+    font-size: calc(var(--font-size-base) - 2px);
+    font-style: italic;
+}

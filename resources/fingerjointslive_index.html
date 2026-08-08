@@ -58,7 +58,7 @@
         </div>
 
         <div class="section" id="section-config">
-            <div class="section-header" onclick="toggleSection(this.parentElement)">
+            <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">
                 <h3>Configuration</h3>
                 <span class="arrow">▼</span>
             </div>
@@ -176,7 +176,7 @@
         </div>
 
         <div class="section" id="section-buttjoint">
-            <div class="section-header" onclick="toggleSection(this.parentElement)">
+            <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">
                 <h3>Close Butt Joint</h3>
                 <span class="arrow">▼</span>
             </div>
@@ -193,7 +193,7 @@
     <!-- TAB 2: THEME MANAGER -->
     <div id="tab-settings" class="tab-content">
         <div class="section" id="section-thememanager">
-            <div class="section-header" onclick="toggleSection(this.parentElement)">
+            <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">
                 <h3>Theme Manager</h3>
                 <span class="arrow">▼</span>
             </div>
@@ -222,12 +222,14 @@
                     <button class="btn-primary" onclick="requestExport('css')">📤 Export style.css</button>
                     <button class="btn-secondary" onclick="requestImport('json')">📂 Import .json</button>
                     <button class="btn-secondary" onclick="requestExport('json')">💾 Export .json</button>
-                    <button id="themeRemoveBtn" class="btn-secondary full-width" onclick="removeSelectedTheme()" disabled title="Select a custom (imported) theme to enable" style="color: #d9534f; border-color: #d9534f;">🗑️ Remove Selected Theme</button>
-                    <button class="btn-secondary full-width" onclick="resetThemeCache()" style="color: #d9534f; border-color: #d9534f;">🗑️ Factory Reset Theme Cache</button>
+                    <button id="themeRemoveBtn" class="btn-secondary full-width" onclick="removeSelectedTheme()" disabled title="Select a custom (imported) theme to enable" style="color: var(--text-danger, #d9534f); border-color: var(--text-danger, #d9534f);">🗑️ Remove Selected Theme</button>
+                    <button class="btn-secondary full-width" onclick="resetThemeCache()" style="color: var(--text-danger, #d9534f); border-color: var(--text-danger, #d9534f);">🗑️ Factory Reset Theme Cache</button>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="version-footer">Finger Joints Live<br><span id="footerVersion">v1.3.1</span>, August 2026</div>
 
     <!-- Quick Help Modal -->
     <div id="helpModal" class="modal-overlay" onclick="hideHelp(event)">

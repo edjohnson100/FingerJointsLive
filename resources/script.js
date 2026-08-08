@@ -4,11 +4,13 @@ const cssVariables = [
     '--row-bg', '--row-border', '--row-hover',
     '--input-bg', '--input-border', '--input-text', '--input-placeholder', '--toggle-bg',
     '--header-hover', '--tab-bg', '--tab-active-bg', '--tab-text', '--tab-active-text',
-    '--btn-primary', '--btn-primary-hover', '--btn-success', '--btn-success-hover',
+    '--btn-primary', '--btn-primary-hover', '--btn-primary-text',
+    '--btn-success', '--btn-success-hover', '--btn-success-text',
     '--btn-secondary', '--btn-secondary-hover', '--btn-secondary-text',
     '--status-success-bg', '--status-success-text',
     '--status-error-bg', '--status-error-text',
-    '--status-info-bg', '--status-info-text'
+    '--status-info-bg', '--status-info-text',
+    '--focus-ring', '--text-danger', '--overlay-bg'
 ];
 let themes = {};
 let baseCSS = "";
@@ -418,7 +420,11 @@ window.fusionJavaScriptHandler = {
                     updateStyleTag();
                 }
                 if (defaults.imported_themes) mergeImportedThemes(defaults.imported_themes);
-                if (defaults.addin_version) document.getElementById('versionTag').textContent = 'v' + defaults.addin_version;
+                if (defaults.addin_version) {
+                    document.getElementById('versionTag').textContent = 'v' + defaults.addin_version;
+                    const footerVer = document.getElementById('footerVersion');
+                    if (footerVer) footerVer.textContent = 'v' + defaults.addin_version;
+                }
                 if (defaults.placementType) document.getElementById('placementType').value = defaults.placementType;
                 if (defaults.dynamicSizeType) document.getElementById('dynamicSizeType').value = defaults.dynamicSizeType;
                 if (defaults.jointType) document.getElementById('jointType').value = defaults.jointType;
