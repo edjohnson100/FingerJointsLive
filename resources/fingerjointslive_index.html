@@ -214,6 +214,18 @@
             </div>
             <div class="section-content data-container">
                 <div class="data-row">
+                    <div class="row-label" title="Relief style. Corner: diagonal, centered on the corner's bisector (most common). Minimal Corner: same bisector but leaves a bit of material short of the corner for a tight forced fit. Long Side / Short Side: single-wall offset that bulges asymmetrically against whichever adjacent wall is longer/shorter at that specific corner.">Style</div>
+                    <div class="row-controls">
+                        <select id="dogboneStyle" onchange="updateVisibility(); autoPreviewDogbone()" style="width: 130px;">
+                            <option value="corner">Corner</option>
+                            <option value="minimal corner">Minimal Corner</option>
+                            <option value="long side">Long Side</option>
+                            <option value="short side">Short Side</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="data-row">
                     <div class="row-label" title="Diameter of the round router bit / end mill you'll cut this relief with. The relief radius (half the bit diameter) is derived automatically.">Router Bit Diameter</div>
                     <div class="row-controls">
                         <input type="text" id="dogboneDiameter" value="3 mm" oninput="autoPreviewDogbone()" style="width: 80px;">
@@ -224,6 +236,13 @@
                     <div class="row-label" title="Safety margin pushing each relief circle slightly past the exact corner instead of just touching it, so the cut unambiguously clears the corner and a tool-path generator doesn't reject it as smaller than the bit due to floating-point rounding at the exact tangent.">Clearance</div>
                     <div class="row-controls">
                         <input type="text" id="dogboneClearance" value="0.1 mm" oninput="autoPreviewDogbone()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row" id="grp-dogboneInterference">
+                    <div class="row-label" title="Minimal Corner style only: how much material is deliberately left short of the corner (the opposite sign of clearance), forcing a tight fit with a smaller, less visually obvious relief than Corner style.">Interference</div>
+                    <div class="row-controls">
+                        <input type="text" id="dogboneInterference" value="0.05 mm" oninput="autoPreviewDogbone()" style="width: 80px;">
                     </div>
                 </div>
 

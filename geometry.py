@@ -628,6 +628,59 @@ def _measureFaceExtentFromEdge(face, edge, plungeAxis):
     return maxExtent
 
 
+def measureAdjacentWallLength(edge, face, plungeAxis):
+    """Measures how long `face` (one wall of a dog bone corner) runs, for Long Side/Short
+    Side style's per-corner "which adjacent wall is longer" comparison. Finds face's other
+    edge that also runs parallel to plungeAxis (the wall's "far edge", as opposed to `edge`
+    itself, the near/corner edge) and measures the perpendicular distance between them - for
+    a simple rectangular wall face there's exactly one such far edge.
+
+    Returns None when that's not true (zero or multiple parallel candidate edges found) - a
+    non-rectangular wall (stepped/curved boundary, or one already relieved by a nearby dog
+    bone) can produce this - so computeDogBoneOffset can fall back to Corner style for that
+    one corner instead of guessing."""
+    epsilon = 0.00001
+    axisToleranceCos = math.cos(math.radians(1))
+    edgeStart = edge.startVertex.geometry
+    edgeEnd = edge.endVertex.geometry
+
+    def isSameEdge(other):
+        # Geometric coincidence, not object identity - proxy objects returned by repeated
+        # API property access aren't guaranteed to be comparable with ==.
+        otherStart = other.startVertex.geometry
+        otherEnd = other.endVertex.geometry
+        direct = edgeStart.distanceTo(otherStart) <= epsilon and edgeEnd.distanceTo(otherEnd) <= epsilon
+        swapped = edgeStart.distanceTo(otherEnd) <= epsilon and edgeEnd.distanceTo(otherStart) <= epsilon
+        return direct or swapped
+
+    farEdges = []
+    for candidateEdge in face.edges:
+        if candidateEdge.geometry.objectType != adsk.core.Line3D.classType():
+            continue
+        if isSameEdge(candidateEdge):
+            continue
+        tangent = candidateEdge.startVertex.geometry.vectorTo(candidateEdge.endVertex.geometry)
+        if tangent.length <= epsilon:
+            continue
+        tangent.normalize()
+        if abs(tangent.dotProduct(plungeAxis)) < axisToleranceCos:
+            continue
+        farEdges.append(candidateEdge)
+
+    if len(farEdges) != 1:
+        return None
+
+    normal = getFaceOutwardNormal(face)
+    inPlaneDir = plungeAxis.crossProduct(normal)
+    if inPlaneDir.length <= epsilon:
+        return None
+    inPlaneDir.normalize()
+
+    farPoint = farEdges[0].startVertex.geometry
+    vector = edgeStart.vectorTo(farPoint)
+    return abs(vector.dotProduct(inPlaneDir))
+
+
 def enumerateDogBoneCandidates(body, plungeAxis, angleTolerance, minWallExtent=0.0):
     """Finds every edge on body that's a genuine interior (concave) corner suitable for a
     dogbone relief: a straight edge between two planar faces, running parallel to
@@ -700,7 +753,23 @@ def computeDogBoneOffset(style, faceDir1, faceDir2, radius, clearance, interfere
     Minimal Corner: the mirror image - center pushed OUT along the same bisector by
     (radius + interference), so the circle's edge falls short of the corner by exactly
     `interference` (a little remaining material forces a tight fit, with a smaller/less
-    visually obvious relief than Corner style)."""
+    visually obvious relief than Corner style).
+
+    Long Side / Short Side: a single-wall offset (not diagonal) - offset along only
+    faceDir1 or faceDir2 puts the circle's center exactly on the OTHER wall's own plane
+    (its component along that wall's normal is zero), so the circle straddles that other
+    wall symmetrically and bulges out along it; meanwhile it clears the CHOSEN wall (the
+    one the offset runs along) by exactly `clearance`, same as Corner style does relative
+    to a single wall. Confirmed against real Fusion geometry (2026-08-13): the offset
+    direction (`faceDirChosen` below) ends up being the LONGER wall's own normal for Long
+    Side, and the SHORTER wall's for Short Side - i.e. "which wall gets the bulge" is the
+    wall NOT chosen as the offset direction, and Long Side bulges along the *shorter*
+    wall while grazing/clearing the longer one (Short Side is the reverse). This is the
+    opposite pairing from this function's first (hand-derived, untested) implementation -
+    trust the code below, not the geometric intuition in this paragraph, if the two ever
+    seem to disagree again. Falls back to the Corner-style formula for this one corner
+    when either wall length is unmeasurable (wallLength1/wallLength2 is None - see
+    measureAdjacentWallLength)."""
     if style == DogBoneStyle.CORNER:
         bisector = faceDir1.copy()
         bisector.add(faceDir2)
@@ -714,7 +783,23 @@ def computeDogBoneOffset(style, faceDir1, faceDir2, radius, clearance, interfere
         bisector.scaleBy(radius + interference)
         return bisector
     elif style in (DogBoneStyle.LONG_SIDE, DogBoneStyle.SHORT_SIDE):
-        raise NotImplementedError("Long Side / Short Side dog bone styles are not implemented yet.")
+        if wallLength1 is None or wallLength2 is None:
+            bisector = faceDir1.copy()
+            bisector.add(faceDir2)
+            bisector.normalize()
+            bisector.scaleBy(max(0.0, radius - clearance))
+            return bisector
+        wall1IsLonger = wallLength1 >= wallLength2
+        wantBulgeOnLonger = (style == DogBoneStyle.LONG_SIDE)
+        # Confirmed backwards against real Fusion geometry (2026-08-13) from the docstring's
+        # hand-derived pairing above - swapped here to match what was actually observed.
+        if wantBulgeOnLonger:
+            faceDirChosen = faceDir1 if wall1IsLonger else faceDir2
+        else:
+            faceDirChosen = faceDir2 if wall1IsLonger else faceDir1
+        offset = faceDirChosen.copy()
+        offset.scaleBy(max(0.0, radius - clearance))
+        return offset
     else:
         raise ValueError(f"Unknown dog bone style: {style}")
 
@@ -733,16 +818,25 @@ def buildDogBoneCylinder(edge, offset, radius):
     return temporaryBRepManager.createCylinderOrCone(pointOne, radius, pointTwo, radius)
 
 
-def applyDogBonesToBody(candidates, style, radius, clearance, interference):
+def applyDogBonesToBody(candidates, style, radius, clearance, interference, plungeAxis):
     """Unions every candidate corner's relief cylinder into one tool body. Returns a
     REMOVAL tool, not a pre-merged result - the caller cuts this from the target body, it
-    must not be unioned with it. Returns None if there are no candidates."""
+    must not be unioned with it. Returns None if there are no candidates.
+
+    plungeAxis is only used for Long Side/Short Side styles' per-corner wall-length
+    measurement (measureAdjacentWallLength) - unused (but still required, callers always
+    have it on hand from detectPlungeAxis) for Corner/Minimal Corner."""
     temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    needsWallLengths = style in (DogBoneStyle.LONG_SIDE, DogBoneStyle.SHORT_SIDE)
     targetBody = None
     for edge, face1, face2 in candidates:
         n1 = getFaceOutwardNormal(face1)
         n2 = getFaceOutwardNormal(face2)
-        offset = computeDogBoneOffset(style, n1, n2, radius, clearance, interference)
+        wallLength1 = wallLength2 = None
+        if needsWallLengths:
+            wallLength1 = measureAdjacentWallLength(edge, face1, plungeAxis)
+            wallLength2 = measureAdjacentWallLength(edge, face2, plungeAxis)
+        offset = computeDogBoneOffset(style, n1, n2, radius, clearance, interference, wallLength1, wallLength2)
         cylinder = buildDogBoneCylinder(edge, offset, radius)
         if cylinder is None:
             continue

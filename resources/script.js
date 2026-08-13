@@ -244,6 +244,7 @@ function updateVisibility() {
     const dynamicSizeType = document.getElementById('dynamicSizeType').value;
     const isFixedNum = document.getElementById('isNumberOfFingersFixed').checked;
     const jointType = document.getElementById('jointType').value;
+    const dogboneStyle = document.getElementById('dogboneStyle').value;
 
     toggleRow('grp-fixedNumFingers', isFixedNum);
     toggleRow('grp-fixedNotchSize', dynamicSizeType === 'fixed notch size');
@@ -252,6 +253,7 @@ function updateVisibility() {
     toggleRow('grp-minFingerSize', !isFixedNum && dynamicSizeType !== 'fixed finger size');
     toggleRow('grp-dovetailAngle', jointType === 'through dovetail');
     toggleRow('grp-reverseTaper', jointType === 'through dovetail');
+    toggleRow('grp-dogboneInterference', dogboneStyle === 'minimal corner');
 }
 
 function toggleSection(sectionEl) {
@@ -316,8 +318,10 @@ function autoPreview() {
 
 function getDogbonePayload() {
     return {
+        style: document.getElementById('dogboneStyle').value,
         diameter: document.getElementById('dogboneDiameter').value,
         clearance: document.getElementById('dogboneClearance').value,
+        interference: document.getElementById('dogboneInterference').value,
         angleTolerance: document.getElementById('dogboneAngleTolerance').value,
     };
 }
@@ -479,8 +483,10 @@ window.fusionJavaScriptHandler = {
                 if (defaults.minFingerSize) document.getElementById('minFingerSize').value = defaults.minFingerSize;
                 if (defaults.gap) document.getElementById('gap').value = defaults.gap;
                 if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
+                if (defaults.style) document.getElementById('dogboneStyle').value = defaults.style;
                 if (defaults.diameter) document.getElementById('dogboneDiameter').value = defaults.diameter;
                 if (defaults.clearance) document.getElementById('dogboneClearance').value = defaults.clearance;
+                if (defaults.interference) document.getElementById('dogboneInterference').value = defaults.interference;
                 if (defaults.angleTolerance) document.getElementById('dogboneAngleTolerance').value = defaults.angleTolerance;
                 if (defaults.theme) {
                     document.getElementById('themeSelect').value = defaults.theme;

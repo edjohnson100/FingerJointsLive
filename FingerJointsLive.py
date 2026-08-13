@@ -299,6 +299,17 @@ def clear_preview():
         pass
 
 
+def _all_expressions_valid(*expressions):
+    """True if every FusionExpression is currently a valid Fusion expression. Guards
+    against a normal mid-edit state - e.g. the user has typed "0." or "-" and not yet
+    finished the number - that autoPreview's 500ms debounce can easily catch before the
+    field settles. FusionExpression.value raises RuntimeError on an invalid expression
+    (Fusion's unitsManager.evaluateExpression), which is not a real error here and
+    should never surface as a messageBox or (worse) Fusion's own unhandled-exception
+    dialog while someone is just typing."""
+    return all(e.isValid for e in expressions)
+
+
 def apply_payload_settings(inputs, payload):
     """Copies the joint-parameter fields of an HTML payload onto a FingerJointFeatureInput."""
     inputs.dynamicSizeType = payload.get('dynamicSizeType', inputs.dynamicSizeType)
@@ -346,17 +357,28 @@ def preview_joints(payload):
         ui.messageBox("Please select at least one First Body and one Second Body to preview.")
         return False
 
+    if not _all_expressions_valid(inputs.fixedNotchSize, inputs.fixedFingerSize,
+                                   inputs.minNotchSize, inputs.minFingerSize,
+                                   inputs.gap, inputs.gapToPart, inputs.dovetailAngle):
+        # Mid-edit state (see _all_expressions_valid) - skip this preview tick silently;
+        # the next debounced tick will pick up the completed value.
+        return False
+
     success = True
     all_tool_bodies = []
-    
-    for b0 in bodies0:
-        for b1 in bodies1:
-            inputs.body0 = b0
-            inputs.body1 = b1
-            toolBodies = geometry.createToolBodies(inputs)
-            if toolBodies is True: continue
-            elif toolBodies is False: success = False
-            else: all_tool_bodies.append((toolBodies[0], toolBodies[1]))
+
+    try:
+        for b0 in bodies0:
+            for b1 in bodies1:
+                inputs.body0 = b0
+                inputs.body1 = b1
+                toolBodies = geometry.createToolBodies(inputs)
+                if toolBodies is True: continue
+                elif toolBodies is False: success = False
+                else: all_tool_bodies.append((toolBodies[0], toolBodies[1]))
+    except Exception:
+        ui.messageBox(f'Could not compute joint preview:\n{traceback.format_exc()}')
+        return False
             
     if all_tool_bodies:
         des = app.activeProduct
@@ -506,6 +528,12 @@ def execute_joints(payload):
             ui.messageBox("Please select at least one First Body and one Second Body.")
             return False
 
+        if not _all_expressions_valid(inputs.fixedNotchSize, inputs.fixedFingerSize,
+                                       inputs.minNotchSize, inputs.minFingerSize,
+                                       inputs.gap, inputs.gapToPart, inputs.dovetailAngle):
+            ui.messageBox("One or more dimension fields contains an invalid value. Please fix it before generating.")
+            return False
+
         result = {'success': True}
         _run_grouped(lambda: _create_joint_features(inputs, bodies0, bodies1, result), 'FJL Generate Joints')
 
@@ -537,13 +565,17 @@ def preview_dogbones(payload):
     if not inputs.body:
         return False
 
+    if not _all_expressions_valid(inputs.diameter, inputs.clearance, inputs.interference, inputs.angleTolerance):
+        # Mid-edit state (see _all_expressions_valid) - skip this preview tick silently.
+        return False
+
     try:
         radius = inputs.diameter.value / 2
         plungeAxis = geometry.detectPlungeAxis(inputs.body)
         candidates = geometry.enumerateDogBoneCandidates(inputs.body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
         if not candidates:
             return True
-        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value, plungeAxis)
     except Exception:
         ui.messageBox(f'Could not compute dog bone preview:\n{traceback.format_exc()}')
         return False
@@ -605,7 +637,7 @@ def _create_dogbone_feature(inputs, body):
         return
 
     try:
-        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value, plungeAxis)
     except Exception:
         ui.messageBox(f'Could not build dog bone geometry:\n{traceback.format_exc()}')
         return
@@ -664,6 +696,10 @@ def execute_dogbones(payload):
 
         if not inputs.body:
             ui.messageBox("Please select a body to relieve.")
+            return False
+
+        if not _all_expressions_valid(inputs.diameter, inputs.clearance, inputs.interference, inputs.angleTolerance):
+            ui.messageBox("One or more dimension fields contains an invalid value. Please fix it before applying.")
             return False
 
         _run_grouped(lambda: _create_dogbone_feature(inputs, inputs.body), 'FJL Apply Dog Bones')
