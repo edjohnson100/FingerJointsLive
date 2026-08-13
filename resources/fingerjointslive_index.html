@@ -199,7 +199,7 @@
         </div>
 
         <div class="data-row" style="margin-bottom: 10px;">
-            <div class="row-label" title="How corners are chosen. Body: auto-detects every qualifying interior corner on a selected body, using its own bounding box to guess the plunge axis. Face: same auto-detection, but the plunge axis comes from a picked face's normal instead - use this when a body isn't axis-aligned and Body mode guesses wrong. Edge: manually pick exactly which corner edges to relieve, bypassing auto-detection entirely.">Selection Mode</div>
+            <div class="row-label" title="How corners are chosen. Body: auto-detects every qualifying interior corner on each selected body, using its own bounding box to guess the plunge axis. Face: same auto-detection, but the plunge axis comes from each picked face's normal instead - use this when a body isn't axis-aligned and Body mode guesses wrong. Edge: manually pick exactly which corner edges to relieve, bypassing auto-detection entirely.">Selection Mode</div>
             <div class="row-controls">
                 <select id="dogboneSelectionMode" onchange="updateVisibility(); autoPreviewDogbone()" style="width: 130px;">
                     <option value="body">Body</option>
@@ -210,19 +210,21 @@
         </div>
 
         <div class="data-container" style="margin-bottom: 15px;">
-            <button id="btn-dogboneBody" class="btn-secondary" onclick="sendAction('select_dogboneBody')">Select Body to Relieve (0)</button>
-            <button id="btn-dogboneFace" class="btn-secondary" onclick="sendAction('select_dogboneFace')">Select Face to Relieve (0)</button>
+            <button id="btn-dogboneBody" class="btn-secondary" onclick="sendAction('select_dogboneBody')">Select Body/Bodies to Relieve (0)</button>
+            <button id="btn-dogboneFace" class="btn-secondary" onclick="sendAction('select_dogboneFace')">Select Face(s) to Relieve (0)</button>
             <button id="btn-dogboneEdges" class="btn-secondary" onclick="sendAction('select_dogboneEdges')">Select Corner Edges (0)</button>
         </div>
 
         <p id="grp-dogboneEdgeTip" style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); margin: -10px 0 15px;">
-            Tip: at a finger-joint notch, the true concave corner edge and a nearby convex edge can be easy to mix up. With kerf comp nonzero, turn on hidden-edge visibility to tell them apart. With kerf comp at zero, temporarily hide the notched body so only the correct edges are pickable. A picked edge that isn't a genuine concave corner is skipped automatically, with a message on Apply.
+            Tip: at a finger-joint notch, the true concave corner edge and a nearby convex edge can be easy to mix up. With kerf comp nonzero, turn on hidden-edge visibility to tell them apart. With kerf comp at zero, temporarily hide the notched body so only the correct edges are pickable. A picked edge that isn't a genuine concave corner is skipped automatically - see the status line below if any picks were skipped.
         </p>
 
         <div class="input-group" style="margin-bottom: 15px;">
             <button class="btn-secondary" onclick="previewDogbones()">Preview</button>
             <button class="btn-primary" onclick="applyDogbones()">Apply Dog Bones</button>
         </div>
+
+        <div id="dogboneStatus" class="status-box"></div>
 
         <div class="section" id="section-dogboneConfig">
             <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">

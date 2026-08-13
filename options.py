@@ -184,9 +184,11 @@ class DogBoneFeatureInput(object):
     DEFAULTS_FILENAME = os.path.join(APP_PATH, 'dogbone_defaults.json')
 
     def __init__(self):
-        # Entities (not persisted - live selections, same convention as body0/body1/direction)
-        self.body = None
-        self.face = None
+        # Entities (not persisted - live selections, same convention as body0/body1/direction).
+        # body/face are lists (Phase 4: multi-select, like body0/body1) even though Body/Face
+        # mode only ever needs one axis-detection heuristic per entity, not per selection.
+        self.body = []
+        self.face = []
         self.edges = []
         # Settings
         self.selectionMode = DogBoneSelectionMode.BODY

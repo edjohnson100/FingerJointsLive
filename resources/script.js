@@ -344,6 +344,20 @@ function _dogboneSelectionBtnId() {
     return 'btn-dogboneBody';
 }
 
+// Persistent, non-blocking status line under the Preview/Apply buttons - gentle
+// feedback (e.g. Edge mode picks that got skipped) that shouldn't interrupt the user
+// the way a messageBox would. Pass '' (or omit) to hide it.
+function setDogboneStatus(message) {
+    const el = document.getElementById('dogboneStatus');
+    if (message) {
+        el.textContent = message;
+        el.className = 'status-box info';
+    } else {
+        el.textContent = '';
+        el.className = 'status-box';
+    }
+}
+
 function applyDogbones() {
     adsk.fusionSendData('notification', JSON.stringify({ action: 'dogbone_apply', payload: getDogbonePayload() }));
 }
@@ -439,15 +453,18 @@ window.fusionJavaScriptHandler = {
                     updateSelBtn('btn-dir', info.count ? 'Direction (Selected)' : 'Select Direction (Auto)', info.count > 0);
                     autoPreview();
                 } else if (info.target === 'dogboneBody') {
-                    updateSelBtn('btn-dogboneBody', `Select Body to Relieve (${info.count})`, info.count > 0);
+                    updateSelBtn('btn-dogboneBody', `Select Body/Bodies to Relieve (${info.count})`, info.count > 0);
                     autoPreviewDogbone();
                 } else if (info.target === 'dogboneFace') {
-                    updateSelBtn('btn-dogboneFace', `Select Face to Relieve (${info.count})`, info.count > 0);
+                    updateSelBtn('btn-dogboneFace', `Select Face(s) to Relieve (${info.count})`, info.count > 0);
                     autoPreviewDogbone();
                 } else if (info.target === 'dogboneEdges') {
                     updateSelBtn('btn-dogboneEdges', `Select Corner Edges (${info.count})`, info.count > 0);
                     autoPreviewDogbone();
                 }
+            } else if (action === 'dogbone_status') {
+                const info = JSON.parse(data);
+                setDogboneStatus(info.message || '');
             } else if (action === 'file_imported') {
                 const payload = JSON.parse(data);
                 if (payload.file_type === 'css') {
