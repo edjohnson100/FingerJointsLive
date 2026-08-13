@@ -54,6 +54,7 @@ TARGET_LABELS = {
     'direction': 'Joint Direction',
     'extendSource': 'Face to Extend',
     'extendTargetFace': 'Target Face',
+    'dogboneBody': 'Body to Relieve',
 }
 
 # Zero-arg callable currently pending execution inside the hidden undo-group command
@@ -66,7 +67,8 @@ active_selections = {
     'body1': [],
     'direction': None,
     'extendSource': None,
-    'extendTargetFace': None
+    'extendTargetFace': None,
+    'dogboneBody': None,
 }
 
 # Timeline index the "Close Butt Joint" loop started at, and whether the next
@@ -315,6 +317,17 @@ def apply_payload_settings(inputs, payload):
     if payload.get('dovetailAngle'): inputs.dovetailAngle.expression = payload.get('dovetailAngle')
 
 
+def apply_dogbone_payload_settings(inputs, payload):
+    """Copies the dog-bone-parameter fields of an HTML payload onto a DogBoneFeatureInput."""
+    inputs.selectionMode = payload.get('selectionMode', inputs.selectionMode)
+    inputs.style = payload.get('style', inputs.style)
+
+    if payload.get('diameter'): inputs.diameter.expression = payload.get('diameter')
+    if payload.get('clearance'): inputs.clearance.expression = payload.get('clearance')
+    if payload.get('interference'): inputs.interference.expression = payload.get('interference')
+    if payload.get('angleTolerance'): inputs.angleTolerance.expression = payload.get('angleTolerance')
+
+
 def preview_joints(payload):
     """Calculates tool bodies and displays them as temporary red blocks."""
     clear_preview()
@@ -513,6 +526,155 @@ def execute_joints(payload):
         return False
 
 
+def preview_dogbones(payload):
+    """Calculates the dog-bone relief tool body for the selected body and displays it as a
+    temporary red/yellow ghost body, mirroring preview_joints()."""
+    clear_preview()
+    inputs = options.DogBoneFeatureInput()
+    inputs.body = active_selections['dogboneBody']
+    apply_dogbone_payload_settings(inputs, payload)
+
+    if not inputs.body:
+        return False
+
+    try:
+        radius = inputs.diameter.value / 2
+        plungeAxis = geometry.detectPlungeAxis(inputs.body)
+        candidates = geometry.enumerateDogBoneCandidates(inputs.body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+        if not candidates:
+            return True
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
+    except Exception:
+        ui.messageBox(f'Could not compute dog bone preview:\n{traceback.format_exc()}')
+        return False
+
+    if tool is None:
+        return True
+
+    des = app.activeProduct
+    root = des.rootComponent
+    cgGroup = root.customGraphicsGroups.add()
+    cgGroup.id = preview_group_id
+
+    face_color = adsk.core.Color.create(255, 255, 0, 150) # Translucent Yellow
+    face_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(face_color)
+
+    edge_color = adsk.core.Color.create(255, 0, 0, 255) # Solid Red
+    edge_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(edge_color)
+
+    cg = cgGroup.addBRepBody(tool)
+    cg.color = face_effect
+
+    for edge in tool.edges:
+        try:
+            crv = cgGroup.addCurve(edge.geometry)
+            crv.color = edge_effect
+            crv.weight = 2
+        except: pass
+
+    app.activeViewport.refresh()
+    return True
+
+
+def _create_dogbone_feature(inputs, body):
+    """Computes the dog-bone relief tool body and creates the base/cut features for it.
+    Runs entirely inside the hidden undo-group command's execute handler (see _run_grouped),
+    so Fusion bundles every feature created here into a single native Undo entry.
+
+    Reports success/failure directly via messageBox from here, rather than through a shared
+    result dict that execute_dogbones would inspect after _run_grouped() returns: that
+    structure looked correct (mirrors _create_joint_features/execute_joints) but isn't safe -
+    execute_joints' own check only ever looks at 'success', which defaults True and is never
+    read before it could meaningfully go False, so a premature read there is invisible; a
+    'was anything actually found' check like this one starts unset and reads as falsy on a
+    premature check, which is exactly what surfaced this ("No qualifying interior corners"
+    shown even though the cut had, or was about to, succeed - confirmed by the user seeing
+    correct geometry immediately after dismissing that message). Doing all messaging inside
+    the same function that does the work sidesteps the cross-call-boundary read entirely,
+    regardless of the exact timing behavior of _run_grouped/cmd_def.execute()."""
+    radius = inputs.diameter.value / 2
+    try:
+        plungeAxis = geometry.detectPlungeAxis(body)
+        candidates = geometry.enumerateDogBoneCandidates(body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+    except Exception:
+        ui.messageBox(f'Could not compute dog bones:\n{traceback.format_exc()}')
+        return
+
+    if not candidates:
+        ui.messageBox("No qualifying interior corners were found on the selected body.")
+        return
+
+    try:
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
+    except Exception:
+        ui.messageBox(f'Could not build dog bone geometry:\n{traceback.format_exc()}')
+        return
+
+    if tool is None:
+        ui.messageBox("Could not build the dog bone relief geometry.")
+        return
+
+    activeComponent = app.activeProduct.activeComponent
+    design = activeComponent.parentDesign
+    prevType = design.designType
+    design.designType = adsk.fusion.DesignTypes.ParametricDesignType
+
+    created_features = []
+    tFeat = createBaseFeature(activeComponent, tool, "FJL_DogBones")
+    if tFeat:
+        created_features.append(tFeat)
+        cFeat = createCutFeature(activeComponent, body, tFeat)
+        if cFeat: created_features.append(cFeat)
+
+    if created_features and design.designType == adsk.fusion.DesignTypes.ParametricDesignType:
+        valid_indices = []
+        for f in created_features:
+            try:
+                if f and hasattr(f, 'timelineObject') and f.timelineObject and f.timelineObject.isValid:
+                    valid_indices.append(f.timelineObject.index)
+            except:
+                pass
+
+        if valid_indices:
+            first_idx = min(valid_indices)
+            last_idx = max(valid_indices)
+
+            max_num = 0
+            for group in design.timeline.timelineGroups:
+                if group.name.startswith("CFG_DogBone_"):
+                    try: max_num = max(max_num, int(group.name.split("_")[-1]))
+                    except ValueError: pass
+
+            try:
+                new_group = design.timeline.timelineGroups.add(first_idx, last_idx)
+                new_group.name = f"CFG_DogBone_{max_num + 1:03d}"
+            except: pass
+
+    design.designType = prevType
+
+
+def execute_dogbones(payload):
+    """Parses HTML settings, merges with the active dog-bone body selection, and applies
+    the dog bone relief operation."""
+    try:
+        clear_preview()
+        inputs = options.DogBoneFeatureInput()
+        inputs.body = active_selections['dogboneBody']
+        apply_dogbone_payload_settings(inputs, payload)
+
+        if not inputs.body:
+            ui.messageBox("Please select a body to relieve.")
+            return False
+
+        _run_grouped(lambda: _create_dogbone_feature(inputs, inputs.body), 'FJL Apply Dog Bones')
+
+        inputs.writeDefaults()
+        return True
+    except:
+        if ui: ui.messageBox(f'Dog Bone Application Failed:\n{traceback.format_exc()}')
+        return False
+
+
 # --- NATIVE SELECTION HANDLERS ---
 class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
     def __init__(self, target, sel_input):
@@ -525,7 +687,7 @@ class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
         global active_selections
         selections = [self.sel_input.selection(i).entity for i in range(self.sel_input.selectionCount)]
 
-        if self.target in ('direction', 'extendSource', 'extendTargetFace'):
+        if self.target in ('direction', 'extendSource', 'extendTargetFace', 'dogboneBody'):
             active_selections[self.target] = selections[0] if selections else None
         else:
             active_selections[self.target] = selections
@@ -573,6 +735,8 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 prompt = 'Select an edge, corner, or face on the body to extend, then click OK.'
             elif self.target == 'extendTargetFace':
                 prompt = 'Select the face to extend to, then click OK.'
+            elif self.target == 'dogboneBody':
+                prompt = 'Select the body to relieve, then click OK.'
 
             selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {TARGET_LABELS[self.target]}', prompt)
 
@@ -587,6 +751,9 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 selInput.setSelectionLimits(0, 1)
             elif self.target == 'extendTargetFace':
                 selInput.addSelectionFilter('PlanarFaces')
+                selInput.setSelectionLimits(0, 1)
+            elif self.target == 'dogboneBody':
+                selInput.addSelectionFilter('SolidBodies')
                 selInput.setSelectionLimits(0, 1)
             else:
                 selInput.addSelectionFilter('SolidBodies')
@@ -638,7 +805,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
             data = json.loads(html_args.data)
             action = data.get('action')
 
-            if action in ('select_body0', 'select_body1', 'select_direction'):
+            if action in ('select_body0', 'select_body1', 'select_direction', 'select_dogboneBody'):
                 target = action.replace('select_', '')
                 cmd_def_id = f'FJL_Select_{target}'
 
@@ -681,13 +848,32 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 active_selections['body1'] = []
                 active_selections['direction'] = None
                 clear_preview()
-                
+
                 palette = ui.palettes.itemById(palette_id)
                 if palette:
                     palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'body0', 'count': 0}))
                     palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'body1', 'count': 0}))
                     palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'direction', 'count': 0}))
-                
+
+            elif action == 'dogbone_preview':
+                preview_dogbones(data.get('payload'))
+
+            elif action == 'dogbone_apply':
+                execute_dogbones(data.get('payload'))
+
+            elif action == 'save_dogbone_settings':
+                prefs = options.DogBoneFeatureInput()
+                apply_dogbone_payload_settings(prefs, data.get('payload', {}))
+                prefs.writeDefaults()
+
+            elif action == 'clear_dogbone_selections':
+                active_selections['dogboneBody'] = None
+                clear_preview()
+
+                palette = ui.palettes.itemById(palette_id)
+                if palette:
+                    palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'dogboneBody', 'count': 0}))
+
             elif action == 'save_preset':
                 presets = load_presets_dict()
                 presets[data.get('name')] = data.get('payload')
@@ -816,6 +1002,14 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     'collapsedSections': defaults.collapsedSections
                 }
 
+                dogbone_defaults = options.DogBoneFeatureInput()
+                defaults_dict['selectionMode'] = dogbone_defaults.selectionMode
+                defaults_dict['style'] = dogbone_defaults.style
+                defaults_dict['diameter'] = dogbone_defaults.diameter.expression
+                defaults_dict['clearance'] = dogbone_defaults.clearance.expression
+                defaults_dict['interference'] = dogbone_defaults.interference.expression
+                defaults_dict['angleTolerance'] = dogbone_defaults.angleTolerance.expression
+
                 # Check if this document has a saved preset attribute from a previous run
                 try:
                     doc = app.activeDocument
@@ -937,7 +1131,7 @@ def run(context):
         handlers.append(onUndoGroupCreated)
 
         # Pre-register Selection Commands
-        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody']:
             c_id = f'FJL_Select_{target}'
             cdef = ui.commandDefinitions.itemById(c_id)
             if cdef: cdef.deleteMe()
@@ -960,7 +1154,7 @@ def stop(context):
         if ui.palettes.itemById(palette_id): ui.palettes.itemById(palette_id).deleteMe()
         if ui.commandDefinitions.itemById(command_id): ui.commandDefinitions.itemById(command_id).deleteMe()
         if ui.commandDefinitions.itemById(undo_group_command_id): ui.commandDefinitions.itemById(undo_group_command_id).deleteMe()
-        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody']:
             c_id = f'FJL_Select_{target}'
             if ui.commandDefinitions.itemById(c_id): ui.commandDefinitions.itemById(c_id).deleteMe()
         panel = ui.allToolbarPanels.itemById('SolidModifyPanel')

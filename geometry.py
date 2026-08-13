@@ -3,7 +3,7 @@ import math
 import adsk.core
 import adsk.fusion
 
-from .options import DynamicSizeType, JointType, PlacementType
+from .options import DynamicSizeType, JointType, PlacementType, DogBoneStyle
 
 
 def findOrthogonalUnitVectors(z):
@@ -137,6 +137,65 @@ def _halfSpaceBox(pivotPoint, normal, size):
     return temporaryBRepManager.createBox(obb)
 
 
+def _addDogBones(temporaryBRepManager, targetBody, slices, minz, maxz, dogBoneInfo, radius, clearance, transform):
+    """Unions one relief cylinder into targetBody for every interior wall x floor corner
+    identified by dogBoneInfo (see _computeDogBoneAxisInfo), skipping walls that coincide with
+    this body's own true physical edge (dogBoneInfo['rowStartIsEdge']/['rowEndIsEdge'] - NOT
+    simply "wall equals minz/maxz", which only means "the row's own boundary", not necessarily a
+    real edge - see _computeDogBoneAxisInfo for why those can differ for an interior/T-junction
+    joint like a shelf mortised into the middle of a wall). Called after targetBody's final clip
+    against the real overlap and its gapToPart transform - dog bones are an additive bulge, so
+    unlike the dovetail wedges (which trim before the clip) they must be added after it or the
+    clip would cut the bulge right back off. Cylinder positions are transformed by `transform`
+    (the same gapToPart matrix already baked into targetBody) so a relief stays visually attached
+    to its wall even when gapToPart is nonzero; the radius itself is left unscaled so it always
+    matches the entered bit diameter exactly.
+
+    Each circle's center is NOT placed on the corner point itself - it's inset along the 45deg
+    bisector, into the pocket, by (radius - clearance). At exactly radius, the circle's edge
+    would just touch the corner; pulling the center in a bit closer than that pushes the circle
+    slightly past the corner instead, so it unambiguously clears it rather than leaving a
+    borderline (and possibly floating-point-fragile) exact tangent. `clearance` is clamped so it
+    can never push the inset negative (center jumping past the corner to the wrong side)."""
+    epsilon = 0.00001
+    diag = 1 / math.sqrt(2)
+    inset = max(0.0, radius - clearance) * diag
+    openMin, openMax = dogBoneInfo['openMin'], dogBoneInfo['openMax']
+    floorAxisIsX = dogBoneInfo['floorAxisIsX']
+    rowStartIsEdge = dogBoneInfo['rowStartIsEdge']
+    rowEndIsEdge = dogBoneInfo['rowEndIsEdge']
+
+    def makePoint(floorVal, openVal, zVal):
+        if floorAxisIsX:
+            return adsk.core.Point3D.create(floorVal, openVal, zVal)
+        else:
+            return adsk.core.Point3D.create(openVal, floorVal, zVal)
+
+    # rowDir/floorDir each say which way the pocket (the material being cut away) lies relative
+    # to that wall - +1 if it's on the +axis side of the wall, -1 if on the -axis side - so the
+    # corner's 45deg bisector, pointing into the pocket, is (rowDir, floorDir)/sqrt(2).
+    walls = []
+    for (sliceCenterStart, sliceThickness) in slices:
+        start = minz + sliceCenterStart
+        end = start + sliceThickness
+        if not (rowStartIsEdge and start <= minz + epsilon):
+            walls.append((start, 1))
+        if not (rowEndIsEdge and end >= maxz - epsilon):
+            walls.append((end, -1))
+
+    for wallZ, rowDir in walls:
+        for floorVal, floorDir in dogBoneInfo['floors']:
+            cornerZ = wallZ + rowDir * inset
+            cornerFloor = floorVal + floorDir * inset
+            pointOne = makePoint(cornerFloor, openMin, cornerZ)
+            pointTwo = makePoint(cornerFloor, openMax, cornerZ)
+            pointOne.transformBy(transform)
+            pointTwo.transformBy(transform)
+            cylinder = temporaryBRepManager.createCylinderOrCone(pointOne, radius, pointTwo, radius)
+            if cylinder is not None:
+                temporaryBRepManager.booleanOperation(targetBody, cylinder, adsk.fusion.BooleanTypes.UnionBooleanType)
+
+
 def _dovetailCombGeometry(body, inputs):
     """Shared setup for the dovetail comb builders: the depth axis/extent, row extent, and
     angle trig, all derived once from the (already-local-coordinates) overlap body so the
@@ -182,6 +241,80 @@ def _dovetailCombGeometry(body, inputs):
         'depthIsX': depthIsX, 'Amin': Amin, 'Amax': Amax, 'wCenter': wCenter, 'Aref': Aref,
         'tanAngle': math.tan(angle), 'cosAngle': math.cos(angle),
         'sinAngle': math.sin(angle) * taperSign,
+    }
+
+
+def _computeDogBoneAxisInfo(overlapLocalBB, originalBody, coordinateSystem):
+    """Classifies the overlap's two non-row local axes (x, y) for dog-bone placement on one of
+    the two joined bodies. One axis should be fully "open" - originalBody's own bounding box
+    matches the overlap's bounds on both sides there, meaning that axis is the panel's true
+    thickness, already open on both faces (a bit plunging clear through the board, same as a
+    box-joint cut always is along the row/z axis). The other axis is the "floor" axis: wherever
+    originalBody's own bound is set by the *other* body's extent rather than its own, that's
+    where a round bit's reach stops and creates a new interior corner - each such side (min
+    and/or max) becomes one (value, direction) entry in the returned 'floors' list, where
+    direction is +1 if the pocket lies on the +floor-axis side of that boundary (a min-side
+    floor) or -1 if on the -floor-axis side (a max-side floor) - see _addDogBones, which uses
+    this sign to inset each relief circle's center into the pocket along the corner's bisector.
+
+    Returns None when the overlap doesn't look like a plain rectangular corner between two flat
+    panels (both axes open, or both axes have a floor side) - dog-bone placement is skipped for
+    that body rather than guessing at more complex geometry (e.g. beveled or stepped edges).
+
+    Also classifies the row axis (z) the same way, as 'rowStartIsEdge'/'rowEndIsEdge': whether
+    minz/maxz - the row's own boundary - coincides with THIS body's own true physical edge there.
+    For a box corner (panels modeled edge-to-edge) it usually does, so the outermost tooth's
+    end needs no relief - same boundary extendStartIfNeeded/extendEndIfNeeded treat specially.
+    But for an interior/T-junction joint (e.g. a shelf mortised into the middle of a wall), minz/
+    maxz is just where the small overlap happens to end, not a real edge of the (much larger)
+    wall - that boundary still needs relief like any other interior wall. This can differ per
+    body in the same joint: the finger side's outermost tooth may sit flush with its own true
+    edge while the notch side's corresponding cut, on the other body, does not."""
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    bodyLocal = temporaryBRepManager.copy(originalBody)
+    coordinateSystem.transformToLocalCoordinates(bodyLocal)
+    bodyBB = bodyLocal.boundingBox
+
+    epsilon = 0.00001
+    omin, omax = overlapLocalBB.minPoint, overlapLocalBB.maxPoint
+    bmin, bmax = bodyBB.minPoint, bodyBB.maxPoint
+
+    xMinOpen = abs(bmin.x - omin.x) <= epsilon
+    xMaxOpen = abs(bmax.x - omax.x) <= epsilon
+    yMinOpen = abs(bmin.y - omin.y) <= epsilon
+    yMaxOpen = abs(bmax.y - omax.y) <= epsilon
+    xOpen = xMinOpen and xMaxOpen
+    yOpen = yMinOpen and yMaxOpen
+
+    if xOpen == yOpen:
+        # Both fully open (no interior corner here at all) or neither is (a shape more complex
+        # than a plain rectangular corner) - either way there's no single well-defined floor axis.
+        return None
+
+    if xOpen:
+        openMin, openMax = omin.x, omax.x
+        floorAxisIsX = False
+        floorMinOpen, floorMaxOpen, floorMin, floorMax = yMinOpen, yMaxOpen, omin.y, omax.y
+    else:
+        openMin, openMax = omin.y, omax.y
+        floorAxisIsX = True
+        floorMinOpen, floorMaxOpen, floorMin, floorMax = xMinOpen, xMaxOpen, omin.x, omax.x
+
+    floors = []
+    if not floorMinOpen:
+        floors.append((floorMin, 1))
+    if not floorMaxOpen:
+        floors.append((floorMax, -1))
+    if not floors:
+        return None
+
+    rowStartIsEdge = abs(bmin.z - omin.z) <= epsilon
+    rowEndIsEdge = abs(bmax.z - omax.z) <= epsilon
+
+    return {
+        'openMin': openMin, 'openMax': openMax,
+        'floorAxisIsX': floorAxisIsX, 'floors': floors,
+        'rowStartIsEdge': rowStartIsEdge, 'rowEndIsEdge': rowEndIsEdge,
     }
 
 
@@ -393,6 +526,231 @@ def extensionLengthToFace(sourceFace, direction, targetFace, margin=0.0):
     if distance <= 0:
         return distance
     return distance + margin
+
+
+# --- Standalone Dog Bone operation ---
+# Applied as a post-process to an already-cut body's real B-Rep topology, rather than baked
+# into finger-joint generation like the (now unused) _addDogBones/_computeDogBoneAxisInfo
+# above. On real topology a corner is bounded exactly where its edge's own vertices are, so
+# unlike the old bounding-box-based model there's no separate "is this boundary the body's
+# true edge, or just where a synthetic overlap region happened to end" question to resolve -
+# every edge enumerateDogBoneCandidates finds is, by construction, a real edge of real
+# geometry.
+
+def detectPlungeAxis(body):
+    """Picks the body's global plunge/cutting axis (the router bit's rotation/travel
+    direction) as whichever bounding-box extent is smallest - generalizes
+    _dovetailCombGeometry's depthIsX heuristic (which only chooses between two axes because
+    its third is already fixed as the joint direction) to all three axes. Assumes the body
+    is reasonably axis-aligned globally, true for typical flat CNC panels; Face selection
+    mode exists for bodies where that assumption doesn't hold."""
+    bb = body.boundingBox
+    dx = bb.maxPoint.x - bb.minPoint.x
+    dy = bb.maxPoint.y - bb.minPoint.y
+    dz = bb.maxPoint.z - bb.minPoint.z
+    if dx <= dy and dx <= dz:
+        return adsk.core.Vector3D.create(1, 0, 0)
+    elif dy <= dz:
+        return adsk.core.Vector3D.create(0, 1, 0)
+    else:
+        return adsk.core.Vector3D.create(0, 0, 1)
+
+
+def classifyEdgeConcavity(edge, face1, face2):
+    """Classifies whether edge (shared by planar face1/face2) is a concave (reflex - a
+    dogbone candidate) or convex corner of the solid.
+
+    Deliberately does NOT use an edge-tangent-based test (e.g. comparing tangent direction
+    to the two face normals' cross product): BRepEdge.startVertex/endVertex ordering is
+    topological, not guaranteed to correlate with any consistent winding relative to the
+    faces, so a tangent-orientation-dependent sign test can silently flip on some corners
+    and not others.
+
+    Instead, a plane-side test needing no edge orientation at all: take a point P on the
+    edge, and check which side of face1's plane face2's interior sample point lies on. If
+    face2 is on the *outward* side of face1 (in the direction of face1's own outward
+    normal), the solid wraps around more than 180 degrees at this edge - concave/reflex,
+    needs a dogbone. If face2 is on the inward side, the corner is convex (an ordinary
+    corner, not a candidate). Cross-checked symmetrically with face1 against face2's plane;
+    disagreement means an ambiguous/degenerate pair, skipped rather than guessed at."""
+    epsilon = 0.00001
+    n1 = getFaceOutwardNormal(face1)
+    n2 = getFaceOutwardNormal(face2)
+    p = edge.startVertex.geometry
+    d1 = p.vectorTo(face2.pointOnFace).dotProduct(n1)
+    d2 = p.vectorTo(face1.pointOnFace).dotProduct(n2)
+    if abs(d1) <= epsilon or abs(d2) <= epsilon:
+        return 'flat'
+    if (d1 > 0) != (d2 > 0):
+        return 'flat'
+    return 'concave' if d1 > 0 else 'convex'
+
+
+def angleBetweenFaces(face1, face2):
+    """The angle (radians) between two planar faces' outward normals - independent of
+    classifyEdgeConcavity's plane-side test: a convex and a concave 90-degree corner both
+    give the same 90-degree angle here, only the plane-side test's sign distinguishes them."""
+    n1 = getFaceOutwardNormal(face1)
+    n2 = getFaceOutwardNormal(face2)
+    dot = max(-1.0, min(1.0, n1.dotProduct(n2)))
+    return math.acos(dot)
+
+
+def _measureFaceExtentFromEdge(face, edge, plungeAxis):
+    """Measures how far `face`'s own geometry extends away from `edge`, in the in-plane
+    direction perpendicular to the edge (i.e. perpendicular to plungeAxis, since candidate
+    edges always run parallel to it) - a robust proxy for "how long is this wall" that
+    doesn't assume face's boundary is a simple rectangle with one clean "far edge" to
+    measure against. A kerf-compensation sliver artifact (see enumerateDogBoneCandidates)
+    is often wedge-shaped rather than rectangular, so it may have zero or several edges
+    running parallel to the plunge axis - walking edges looking for exactly one was tried
+    first and does not reliably catch these; measuring every vertex's own position instead
+    works regardless of how many edges bound the face.
+
+    inPlaneDir = plungeAxis x face's own outward normal is perpendicular to both, so it lies
+    within face's plane and is perpendicular to the edge - exactly the direction a wall
+    "extends away from its corner" in the cross-section plane the dogbone offset itself
+    lives in."""
+    epsilon = 0.00001
+    normal = getFaceOutwardNormal(face)
+    inPlaneDir = plungeAxis.crossProduct(normal)
+    if inPlaneDir.length <= epsilon:
+        return None
+    inPlaneDir.normalize()
+
+    edgePoint = edge.startVertex.geometry
+    maxExtent = 0.0
+    for vertex in face.vertices:
+        vector = edgePoint.vectorTo(vertex.geometry)
+        extent = abs(vector.dotProduct(inPlaneDir))
+        if extent > maxExtent:
+            maxExtent = extent
+    return maxExtent
+
+
+def enumerateDogBoneCandidates(body, plungeAxis, angleTolerance, minWallExtent=0.0):
+    """Finds every edge on body that's a genuine interior (concave) corner suitable for a
+    dogbone relief: a straight edge between two planar faces, running parallel to
+    plungeAxis, whose two faces meet within angleTolerance (radians) of 90 degrees, and
+    whose adjacent walls both extend at least minWallExtent away from the corner.
+
+    The parallel-to-plunge-axis requirement isn't just a heuristic borrowed by analogy - two
+    faces with mutually perpendicular normals intersect along a line parallel to the third
+    orthogonal axis, so any genuine interior-corner edge of a 2.5D CNC-style cut necessarily
+    runs parallel to the plunge axis; edges that don't are unrelated geometry (e.g. the
+    panel's own outer silhouette), not candidates that merely failed some other check.
+
+    minWallExtent guards against a real but unwanted artifact: negative-gap kerf
+    compensation (see defineToolBodyDimensions' extendStartIfNeeded/extendEndIfNeeded) can
+    leave a hairline sliver of geometry at a row boundary, only as wide as the kerf value
+    (hundredths of a mm) rather than a real finger/notch (several mm) - concave and ~90
+    degrees just like a genuine corner, but far too short for a relief circle to make any
+    physical sense there. Callers should pass the bit radius: a wall shorter than the bit
+    itself can't be usefully relieved regardless of why it's short."""
+    epsilon = 0.00001
+    axisToleranceCos = math.cos(math.radians(1))  # candidate edges must be parallel to plungeAxis within ~1 degree
+    candidates = []
+    for edge in body.edges:
+        if edge.geometry.objectType != adsk.core.Line3D.classType():
+            continue
+        faces = list(edge.faces)
+        if len(faces) != 2:
+            continue
+        face1, face2 = faces
+        if face1.geometry.objectType != adsk.core.Plane.classType():
+            continue
+        if face2.geometry.objectType != adsk.core.Plane.classType():
+            continue
+
+        tangent = edge.startVertex.geometry.vectorTo(edge.endVertex.geometry)
+        if tangent.length <= epsilon:
+            continue
+        tangent.normalize()
+        if abs(tangent.dotProduct(plungeAxis)) < axisToleranceCos:
+            continue
+
+        if classifyEdgeConcavity(edge, face1, face2) != 'concave':
+            continue
+        if abs(angleBetweenFaces(face1, face2) - math.pi / 2) > angleTolerance:
+            continue
+
+        if minWallExtent > 0:
+            extent1 = _measureFaceExtentFromEdge(face1, edge, plungeAxis)
+            extent2 = _measureFaceExtentFromEdge(face2, edge, plungeAxis)
+            if (extent1 is not None and extent1 < minWallExtent) or (extent2 is not None and extent2 < minWallExtent):
+                continue
+
+        candidates.append((edge, face1, face2))
+    return candidates
+
+
+def computeDogBoneOffset(style, faceDir1, faceDir2, radius, clearance, interference, wallLength1=None, wallLength2=None):
+    """Computes the 3D offset vector (from the true corner point - any point on the
+    candidate edge, since faceDir1/faceDir2 are constant along the whole edge for planar
+    faces) to a relief circle's center, for the given style. faceDir1/faceDir2 are the two
+    adjacent faces' outward normals: already in-plane and perpendicular to the edge's
+    tangent for planar faces (no extra projection needed), and they double as the two
+    "into the pocket" wall directions the offset is built from.
+
+    Corner: center inset along the bisector by (radius - clearance) - at exactly `radius`
+    the circle's edge would just touch the corner; clearance pulls the center a bit closer
+    so the circle pushes slightly past the corner instead, unambiguously clearing it rather
+    than leaving a borderline (and floating-point-fragile) exact tangent.
+
+    Minimal Corner: the mirror image - center pushed OUT along the same bisector by
+    (radius + interference), so the circle's edge falls short of the corner by exactly
+    `interference` (a little remaining material forces a tight fit, with a smaller/less
+    visually obvious relief than Corner style)."""
+    if style == DogBoneStyle.CORNER:
+        bisector = faceDir1.copy()
+        bisector.add(faceDir2)
+        bisector.normalize()
+        bisector.scaleBy(max(0.0, radius - clearance))
+        return bisector
+    elif style == DogBoneStyle.MINIMAL_CORNER:
+        bisector = faceDir1.copy()
+        bisector.add(faceDir2)
+        bisector.normalize()
+        bisector.scaleBy(radius + interference)
+        return bisector
+    elif style in (DogBoneStyle.LONG_SIDE, DogBoneStyle.SHORT_SIDE):
+        raise NotImplementedError("Long Side / Short Side dog bone styles are not implemented yet.")
+    else:
+        raise ValueError(f"Unknown dog bone style: {style}")
+
+
+def buildDogBoneCylinder(edge, offset, radius):
+    """Builds one relief cylinder spanning the candidate edge's own extent (its start/end
+    vertices, unadjusted), shifted by `offset` from the true corner. On real topology the
+    edge is already bounded exactly where its adjacent faces terminate, so - unlike the old
+    bounding-box-based dog bone model - no separate "does this reach the panel's true face"
+    computation is needed here."""
+    pointOne = edge.startVertex.geometry.copy()
+    pointOne.translateBy(offset)
+    pointTwo = edge.endVertex.geometry.copy()
+    pointTwo.translateBy(offset)
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    return temporaryBRepManager.createCylinderOrCone(pointOne, radius, pointTwo, radius)
+
+
+def applyDogBonesToBody(candidates, style, radius, clearance, interference):
+    """Unions every candidate corner's relief cylinder into one tool body. Returns a
+    REMOVAL tool, not a pre-merged result - the caller cuts this from the target body, it
+    must not be unioned with it. Returns None if there are no candidates."""
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    targetBody = None
+    for edge, face1, face2 in candidates:
+        n1 = getFaceOutwardNormal(face1)
+        n2 = getFaceOutwardNormal(face2)
+        offset = computeDogBoneOffset(style, n1, n2, radius, clearance, interference)
+        cylinder = buildDogBoneCylinder(edge, offset, radius)
+        if cylinder is None:
+            continue
+        if targetBody is None:
+            targetBody = cylinder
+        else:
+            temporaryBRepManager.booleanOperation(targetBody, cylinder, adsk.fusion.BooleanTypes.UnionBooleanType)
+    return targetBody
 
 
 def createToolBodies(inputs):

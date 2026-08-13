@@ -23,6 +23,7 @@
     
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-selections', event)">Joints</button>
+        <button class="tab-btn" onclick="switchTab('tab-dogbone', event)">Dogbone</button>
         <button class="tab-btn" onclick="switchTab('tab-settings', event)">Themes</button>
     </div>
 
@@ -190,7 +191,56 @@
         </div>
     </div>
 
-    <!-- TAB 2: THEME MANAGER -->
+    <!-- TAB 2: DOG BONE -->
+    <div id="tab-dogbone" class="tab-content">
+
+        <div class="controls-bar" style="justify-content: flex-end; margin-bottom: 5px;">
+            <button class="action-btn" style="width: auto; font-size: calc(var(--font-size-base) - 2px); padding: 2px 8px;" onclick="sendAction('clear_dogbone_selections')" title="Clear selected body">Clear Pick</button>
+        </div>
+
+        <div class="data-container" style="margin-bottom: 15px;">
+            <button id="btn-dogboneBody" class="btn-secondary" onclick="sendAction('select_dogboneBody')">Select Body to Relieve (0)</button>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 15px;">
+            <button class="btn-secondary" onclick="previewDogbones()">Preview</button>
+            <button class="btn-primary" onclick="applyDogbones()">Apply Dog Bones</button>
+        </div>
+
+        <div class="section" id="section-dogboneConfig">
+            <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">
+                <h3>Configuration</h3>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="section-content data-container">
+                <div class="data-row">
+                    <div class="row-label" title="Diameter of the round router bit / end mill you'll cut this relief with. The relief radius (half the bit diameter) is derived automatically.">Router Bit Diameter</div>
+                    <div class="row-controls">
+                        <input type="text" id="dogboneDiameter" value="3 mm" oninput="autoPreviewDogbone()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label" title="Safety margin pushing each relief circle slightly past the exact corner instead of just touching it, so the cut unambiguously clears the corner and a tool-path generator doesn't reject it as smaller than the bit due to floating-point rounding at the exact tangent.">Clearance</div>
+                    <div class="row-controls">
+                        <input type="text" id="dogboneClearance" value="0.1 mm" oninput="autoPreviewDogbone()" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="data-row">
+                    <div class="row-label" title="How close to 90 degrees the angle between two adjacent faces must be for that corner to qualify for a dog bone relief.">Angle Tolerance</div>
+                    <div class="row-controls">
+                        <input type="text" id="dogboneAngleTolerance" value="5 deg" oninput="autoPreviewDogbone()" style="width: 80px;">
+                    </div>
+                </div>
+                <p style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); margin: 4px 0 0;">
+                    Select a body that's already had finger joints cut into it, then Preview/Apply to add round relief cuts at its interior corners so a CNC router bit can fully clear them. Not needed for laser or waterjet cutting.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: THEME MANAGER -->
     <div id="tab-settings" class="tab-content">
         <div class="section" id="section-thememanager">
             <div class="section-header" tabindex="0" role="button" onclick="toggleSection(this.parentElement)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSection(this.parentElement);}">

@@ -314,6 +314,42 @@ function autoPreview() {
     }
 }
 
+function getDogbonePayload() {
+    return {
+        diameter: document.getElementById('dogboneDiameter').value,
+        clearance: document.getElementById('dogboneClearance').value,
+        angleTolerance: document.getElementById('dogboneAngleTolerance').value,
+    };
+}
+
+function applyDogbones() {
+    adsk.fusionSendData('notification', JSON.stringify({ action: 'dogbone_apply', payload: getDogbonePayload() }));
+}
+
+function previewDogbones() {
+    adsk.fusionSendData('notification', JSON.stringify({ action: 'dogbone_preview', payload: getDogbonePayload() }));
+}
+
+let saveDogboneSettingsTimeout;
+function saveDogboneSettings() {
+    clearTimeout(saveDogboneSettingsTimeout);
+    saveDogboneSettingsTimeout = setTimeout(() => {
+        adsk.fusionSendData('notification', JSON.stringify({ action: 'save_dogbone_settings', payload: getDogbonePayload() }));
+    }, 500);
+}
+
+let dogbonePreviewTimeout;
+function autoPreviewDogbone() {
+    saveDogboneSettings();
+    const hasDogboneBody = document.getElementById('btn-dogboneBody').classList.contains('btn-primary');
+    if (hasDogboneBody) {
+        clearTimeout(dogbonePreviewTimeout);
+        dogbonePreviewTimeout = setTimeout(() => {
+            previewDogbones();
+        }, 500); // 500ms debounce to prevent freezing the Fusion BRep engine
+    }
+}
+
 function savePreset() {
     const name = prompt("Enter a name for this preset:");
     if (name) {
@@ -373,12 +409,17 @@ window.fusionJavaScriptHandler = {
                 const info = JSON.parse(data);
                 if (info.target === 'body0') {
                     updateSelBtn('btn-body0', `Select 1st Body/Bodies (${info.count})`, info.count > 0);
+                    autoPreview();
                 } else if (info.target === 'body1') {
                     updateSelBtn('btn-body1', `Select 2nd Body/Bodies (${info.count})`, info.count > 0);
+                    autoPreview();
                 } else if (info.target === 'direction') {
                     updateSelBtn('btn-dir', info.count ? 'Direction (Selected)' : 'Select Direction (Auto)', info.count > 0);
+                    autoPreview();
+                } else if (info.target === 'dogboneBody') {
+                    updateSelBtn('btn-dogboneBody', `Select Body to Relieve (${info.count})`, info.count > 0);
+                    autoPreviewDogbone();
                 }
-                autoPreview();
             } else if (action === 'file_imported') {
                 const payload = JSON.parse(data);
                 if (payload.file_type === 'css') {
@@ -438,6 +479,9 @@ window.fusionJavaScriptHandler = {
                 if (defaults.minFingerSize) document.getElementById('minFingerSize').value = defaults.minFingerSize;
                 if (defaults.gap) document.getElementById('gap').value = defaults.gap;
                 if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
+                if (defaults.diameter) document.getElementById('dogboneDiameter').value = defaults.diameter;
+                if (defaults.clearance) document.getElementById('dogboneClearance').value = defaults.clearance;
+                if (defaults.angleTolerance) document.getElementById('dogboneAngleTolerance').value = defaults.angleTolerance;
                 if (defaults.theme) {
                     document.getElementById('themeSelect').value = defaults.theme;
                     changeTheme();
@@ -461,6 +505,7 @@ window.fusionJavaScriptHandler = {
                 }
                 updateVisibility();
                 autoPreview();
+                autoPreviewDogbone();
             } else if (action === 'update_presets') {
                 const dataObj = JSON.parse(data);
                 const select = document.getElementById('presetSelect');

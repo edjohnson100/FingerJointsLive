@@ -22,6 +22,17 @@ class JointType:
     # Half-blind dovetails are a deferred follow-on; any shoulder-depth-style
     # fields they need attach here as new additive values, not a rework of this enum.
 
+class DogBoneStyle:
+    CORNER = 'corner'
+    MINIMAL_CORNER = 'minimal corner'
+    LONG_SIDE = 'long side'
+    SHORT_SIDE = 'short side'
+
+class DogBoneSelectionMode:
+    BODY = 'body'
+    FACE = 'face'
+    EDGE = 'edge'
+
 class FusionExpression(object):
     def __init__(self, expression, unitType=None):
         # unitType defaults to the design's length units (e.g. "mm"); pass "deg"
@@ -160,3 +171,78 @@ class FingerJointFeatureInput(object):
         self.paletteHeight = defaultData.get('paletteHeight', self.paletteHeight)
         self.paletteLeft = defaultData.get('paletteLeft', self.paletteLeft)
         self.paletteTop = defaultData.get('paletteTop', self.paletteTop)
+
+
+# Settings for the standalone "Dog Bone" operation, applied as a post-process to an
+# already-cut body's real B-Rep topology rather than baked into finger-joint generation
+# (see geometry.py's detectPlungeAxis/enumerateDogBoneCandidates/etc.). Kept as its own
+# class/JSON file (not folded into FingerJointFeatureInput/defaults.json) since it has its
+# own independent selection state and settings, and FingerJointFeatureInput.writeDefaults()
+# overwrites its whole file wholesale on every save - sharing a file would mean each class's
+# save silently clobbers the other's keys.
+class DogBoneFeatureInput(object):
+    DEFAULTS_FILENAME = os.path.join(APP_PATH, 'dogbone_defaults.json')
+
+    def __init__(self):
+        # Entities (not persisted - live selections, same convention as body0/body1/direction)
+        self.body = None
+        self.face = None
+        self.edges = []
+        # Settings
+        self.selectionMode = DogBoneSelectionMode.BODY
+        self.style = DogBoneStyle.CORNER
+        # Values
+        self.diameter = FusionExpression("3 mm")
+        # Safety margin subtracted from the bit radius when positioning a Corner/Long/Short
+        # relief circle (see geometry.py's computeDogBoneOffset): without it, a circle placed
+        # to just barely touch the true corner point can compute as marginally short of it due
+        # to floating-point error, which some CAM tool-path generators reject as a feature
+        # smaller than the bit. A small clearance pushes the circle slightly past the corner
+        # instead, so it unambiguously clears.
+        self.clearance = FusionExpression("0.1 mm")
+        # Minimal Corner style only: how much material is deliberately left short of the
+        # corner (the opposite sign of clearance) for a tight forced fit with a less visually
+        # obvious relief than a fully-cleared corner.
+        self.interference = FusionExpression("0.05 mm")
+        # How close to 90 degrees the angle between two adjacent faces must be for that edge
+        # to qualify as a dogbone candidate at all, in Body/Face selection mode.
+        self.angleTolerance = FusionExpression("5 deg", unitType="deg")
+        self.readDefaults()
+
+    def writeDefaults(self):
+        defaultData = {
+            'selectionMode': self.selectionMode,
+            'style': self.style,
+            'diameter': self.diameter.expression,
+            'clearance': self.clearance.expression,
+            'interference': self.interference.expression,
+            'angleTolerance': self.angleTolerance.expression,
+        }
+        with open(self.DEFAULTS_FILENAME, 'w', encoding='UTF-8') as json_file:
+            json.dump(defaultData, json_file, ensure_ascii=False)
+
+    def readDefaults(self):
+        def expressionOrDefault(value, default, unitType=None):
+            expression = FusionExpression(value, unitType=unitType)
+            if value and expression.isValid:
+                return expression
+            else:
+                return default
+
+        if not os.path.isfile(self.DEFAULTS_FILENAME):
+            return
+        with open(self.DEFAULTS_FILENAME, 'r', encoding='UTF-8') as json_file:
+            try:
+                defaultData = json.load(json_file)
+            except ValueError:
+                app = adsk.core.Application.get()
+                if app and app.userInterface:
+                    app.userInterface.messageBox('Cannot read default options. Invalid JSON in "%s":' % self.DEFAULTS_FILENAME)
+                return
+
+        self.selectionMode = defaultData.get('selectionMode', self.selectionMode)
+        self.style = defaultData.get('style', self.style)
+        self.diameter = expressionOrDefault(defaultData.get('diameter'), self.diameter)
+        self.clearance = expressionOrDefault(defaultData.get('clearance'), self.clearance)
+        self.interference = expressionOrDefault(defaultData.get('interference'), self.interference)
+        self.angleTolerance = expressionOrDefault(defaultData.get('angleTolerance'), self.angleTolerance, unitType="deg")

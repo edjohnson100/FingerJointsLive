@@ -54,6 +54,7 @@ CLAUDE.md
 # ----------------------
 Archive/
 defaults.json
+dogbone_defaults.json
 .gitignore
 .npmignore
 .yarnignore
