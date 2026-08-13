@@ -240,11 +240,16 @@ function toggleRow(id, isVisible) {
     document.getElementById(id).style.display = isVisible ? 'flex' : 'none';
 }
 
+function toggleElement(id, isVisible) {
+    document.getElementById(id).style.display = isVisible ? '' : 'none';
+}
+
 function updateVisibility() {
     const dynamicSizeType = document.getElementById('dynamicSizeType').value;
     const isFixedNum = document.getElementById('isNumberOfFingersFixed').checked;
     const jointType = document.getElementById('jointType').value;
     const dogboneStyle = document.getElementById('dogboneStyle').value;
+    const dogboneSelectionMode = document.getElementById('dogboneSelectionMode').value;
 
     toggleRow('grp-fixedNumFingers', isFixedNum);
     toggleRow('grp-fixedNotchSize', dynamicSizeType === 'fixed notch size');
@@ -254,6 +259,11 @@ function updateVisibility() {
     toggleRow('grp-dovetailAngle', jointType === 'through dovetail');
     toggleRow('grp-reverseTaper', jointType === 'through dovetail');
     toggleRow('grp-dogboneInterference', dogboneStyle === 'minimal corner');
+    toggleElement('btn-dogboneBody', dogboneSelectionMode === 'body');
+    toggleElement('btn-dogboneFace', dogboneSelectionMode === 'face');
+    toggleElement('btn-dogboneEdges', dogboneSelectionMode === 'edge');
+    toggleElement('grp-dogboneEdgeTip', dogboneSelectionMode === 'edge');
+    toggleRow('grp-dogboneAngleTolerance', dogboneSelectionMode !== 'edge');
 }
 
 function toggleSection(sectionEl) {
@@ -318,12 +328,20 @@ function autoPreview() {
 
 function getDogbonePayload() {
     return {
+        selectionMode: document.getElementById('dogboneSelectionMode').value,
         style: document.getElementById('dogboneStyle').value,
         diameter: document.getElementById('dogboneDiameter').value,
         clearance: document.getElementById('dogboneClearance').value,
         interference: document.getElementById('dogboneInterference').value,
         angleTolerance: document.getElementById('dogboneAngleTolerance').value,
     };
+}
+
+function _dogboneSelectionBtnId() {
+    const mode = document.getElementById('dogboneSelectionMode').value;
+    if (mode === 'face') return 'btn-dogboneFace';
+    if (mode === 'edge') return 'btn-dogboneEdges';
+    return 'btn-dogboneBody';
 }
 
 function applyDogbones() {
@@ -345,8 +363,8 @@ function saveDogboneSettings() {
 let dogbonePreviewTimeout;
 function autoPreviewDogbone() {
     saveDogboneSettings();
-    const hasDogboneBody = document.getElementById('btn-dogboneBody').classList.contains('btn-primary');
-    if (hasDogboneBody) {
+    const hasSelection = document.getElementById(_dogboneSelectionBtnId()).classList.contains('btn-primary');
+    if (hasSelection) {
         clearTimeout(dogbonePreviewTimeout);
         dogbonePreviewTimeout = setTimeout(() => {
             previewDogbones();
@@ -423,6 +441,12 @@ window.fusionJavaScriptHandler = {
                 } else if (info.target === 'dogboneBody') {
                     updateSelBtn('btn-dogboneBody', `Select Body to Relieve (${info.count})`, info.count > 0);
                     autoPreviewDogbone();
+                } else if (info.target === 'dogboneFace') {
+                    updateSelBtn('btn-dogboneFace', `Select Face to Relieve (${info.count})`, info.count > 0);
+                    autoPreviewDogbone();
+                } else if (info.target === 'dogboneEdges') {
+                    updateSelBtn('btn-dogboneEdges', `Select Corner Edges (${info.count})`, info.count > 0);
+                    autoPreviewDogbone();
                 }
             } else if (action === 'file_imported') {
                 const payload = JSON.parse(data);
@@ -483,6 +507,7 @@ window.fusionJavaScriptHandler = {
                 if (defaults.minFingerSize) document.getElementById('minFingerSize').value = defaults.minFingerSize;
                 if (defaults.gap) document.getElementById('gap').value = defaults.gap;
                 if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
+                if (defaults.selectionMode) document.getElementById('dogboneSelectionMode').value = defaults.selectionMode;
                 if (defaults.style) document.getElementById('dogboneStyle').value = defaults.style;
                 if (defaults.diameter) document.getElementById('dogboneDiameter').value = defaults.diameter;
                 if (defaults.clearance) document.getElementById('dogboneClearance').value = defaults.clearance;

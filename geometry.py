@@ -737,6 +737,52 @@ def enumerateDogBoneCandidates(body, plungeAxis, angleTolerance, minWallExtent=0
     return candidates
 
 
+def buildDogBoneCandidatesFromEdges(edges):
+    """Builds dog bone candidates directly from user-picked edges (Edge selection mode),
+    bypassing enumerateDogBoneCandidates' angle-tolerance auto-detection entirely - Edge
+    mode exists precisely to let the user relieve corners that aren't close to 90 degrees,
+    so no angle check applies here.
+
+    Still rejects a picked edge outright if it isn't a genuine concave (reflex) corner at
+    all, via the same classifyEdgeConcavity plane-side test enumerateDogBoneCandidates
+    uses. This is NOT the angle heuristic Edge mode is meant to skip - a convex corner
+    isn't a valid dog bone candidate under any style, full stop, so building a candidate
+    from one wouldn't be "trusting the user's judgment," it would silently produce
+    nonsensical geometry (the offset math assumes a concave pocket and drives the relief
+    circle into material instead of away from it on a convex corner). This matters in
+    practice: at the mouth of a finger-joint notch, the true concave "back of slot" edge
+    and a convex edge one wall over sit right next to each other and are easy to
+    misclick, especially at zero kerf comp where the finger's and slot's edges can be
+    coincident.
+
+    Also validates each picked edge is a straight line between exactly two planar faces,
+    a hard requirement of the offset/cylinder math downstream, not a heuristic.
+
+    Returns (candidates, skipped) - candidates is the usual list of (edge, face1, face2)
+    tuples; skipped is a list of short human-readable reasons, one per picked edge that
+    didn't qualify, for the caller to report back to the user rather than silently
+    dropping picks."""
+    candidates = []
+    skipped = []
+    for edge in edges:
+        if edge.geometry.objectType != adsk.core.Line3D.classType():
+            skipped.append("an edge that isn't straight")
+            continue
+        faces = list(edge.faces)
+        if len(faces) != 2:
+            skipped.append("an edge that isn't shared by exactly two faces")
+            continue
+        face1, face2 = faces
+        if face1.geometry.objectType != adsk.core.Plane.classType() or face2.geometry.objectType != adsk.core.Plane.classType():
+            skipped.append("an edge with a non-planar adjacent face")
+            continue
+        if classifyEdgeConcavity(edge, face1, face2) != 'concave':
+            skipped.append("a convex or flat corner (not a valid dog bone candidate)")
+            continue
+        candidates.append((edge, face1, face2))
+    return candidates, skipped
+
+
 def computeDogBoneOffset(style, faceDir1, faceDir2, radius, clearance, interference, wallLength1=None, wallLength2=None):
     """Computes the 3D offset vector (from the true corner point - any point on the
     candidate edge, since faceDir1/faceDir2 are constant along the whole edge for planar
@@ -818,24 +864,34 @@ def buildDogBoneCylinder(edge, offset, radius):
     return temporaryBRepManager.createCylinderOrCone(pointOne, radius, pointTwo, radius)
 
 
-def applyDogBonesToBody(candidates, style, radius, clearance, interference, plungeAxis):
+def applyDogBonesToBody(candidates, style, radius, clearance, interference):
     """Unions every candidate corner's relief cylinder into one tool body. Returns a
     REMOVAL tool, not a pre-merged result - the caller cuts this from the target body, it
     must not be unioned with it. Returns None if there are no candidates.
 
-    plungeAxis is only used for Long Side/Short Side styles' per-corner wall-length
-    measurement (measureAdjacentWallLength) - unused (but still required, callers always
-    have it on hand from detectPlungeAxis) for Corner/Minimal Corner."""
+    Long Side/Short Side's per-corner wall-length measurement derives its own axis from
+    each candidate edge's own tangent direction, rather than taking one caller-supplied
+    global plunge axis - a corner-relief cylinder's axis always runs along its own edge by
+    construction, so this is exact for every candidate regardless of where it came from:
+    Body/Face mode's auto-detection (which already constrains candidate edges to within
+    ~1 degree of a real global plunge axis, so this is a no-op difference there) or Edge
+    mode's direct user picks (which have no such guarantee - the user can select corners
+    on differently-oriented faces of the same body, where no single global axis would be
+    correct for all of them)."""
     temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
     needsWallLengths = style in (DogBoneStyle.LONG_SIDE, DogBoneStyle.SHORT_SIDE)
+    epsilon = 0.00001
     targetBody = None
     for edge, face1, face2 in candidates:
         n1 = getFaceOutwardNormal(face1)
         n2 = getFaceOutwardNormal(face2)
         wallLength1 = wallLength2 = None
         if needsWallLengths:
-            wallLength1 = measureAdjacentWallLength(edge, face1, plungeAxis)
-            wallLength2 = measureAdjacentWallLength(edge, face2, plungeAxis)
+            edgeTangent = edge.startVertex.geometry.vectorTo(edge.endVertex.geometry)
+            if edgeTangent.length > epsilon:
+                edgeTangent.normalize()
+                wallLength1 = measureAdjacentWallLength(edge, face1, edgeTangent)
+                wallLength2 = measureAdjacentWallLength(edge, face2, edgeTangent)
         offset = computeDogBoneOffset(style, n1, n2, radius, clearance, interference, wallLength1, wallLength2)
         cylinder = buildDogBoneCylinder(edge, offset, radius)
         if cylinder is None:

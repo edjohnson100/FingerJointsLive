@@ -55,6 +55,8 @@ TARGET_LABELS = {
     'extendSource': 'Face to Extend',
     'extendTargetFace': 'Target Face',
     'dogboneBody': 'Body to Relieve',
+    'dogboneFace': 'Face for Plunge Axis',
+    'dogboneEdges': 'Corner Edges to Relieve',
 }
 
 # Zero-arg callable currently pending execution inside the hidden undo-group command
@@ -69,6 +71,8 @@ active_selections = {
     'extendSource': None,
     'extendTargetFace': None,
     'dogboneBody': None,
+    'dogboneFace': None,
+    'dogboneEdges': [],
 }
 
 # Timeline index the "Close Butt Joint" loop started at, and whether the next
@@ -554,15 +558,74 @@ def execute_joints(payload):
         return False
 
 
+def _dogbone_has_selection(inputs):
+    """Whether the currently-active selectionMode has something to work with. Body/Face
+    mode need their single entity; Edge mode needs at least one picked edge."""
+    if inputs.selectionMode == options.DogBoneSelectionMode.FACE:
+        return bool(inputs.face)
+    elif inputs.selectionMode == options.DogBoneSelectionMode.EDGE:
+        return bool(inputs.edges)
+    else:
+        return bool(inputs.body)
+
+
+def _dogbone_selection_message(inputs):
+    if inputs.selectionMode == options.DogBoneSelectionMode.FACE:
+        return "Please select a face to relieve."
+    elif inputs.selectionMode == options.DogBoneSelectionMode.EDGE:
+        return "Please select one or more corner edges to relieve."
+    else:
+        return "Please select a body to relieve."
+
+
+def _resolve_dogbone_candidates(inputs, radius):
+    """Resolves (body, candidates, skipped) for the active selectionMode. Assumes
+    _dogbone_has_selection(inputs) is already True. Body/Face mode auto-detect corners via
+    geometry.enumerateDogBoneCandidates (Face mode substitutes the picked face's own
+    outward normal for detectPlungeAxis's bounding-box guess - useful when a body isn't
+    axis-aligned globally); skipped is always [] there, since minWallExtent-filtered
+    corners are simply never candidates in the first place, not a pick gone wrong. Edge
+    mode builds candidates straight from the user's own picks
+    (geometry.buildDogBoneCandidatesFromEdges) - no angle auto-detection, but a picked
+    edge that isn't a genuine concave corner is rejected outright (not silently accepted);
+    skipped carries one reason string per rejected pick for the caller to report."""
+    if inputs.selectionMode == options.DogBoneSelectionMode.FACE:
+        body = inputs.face.body
+        plungeAxis = geometry.getFaceOutwardNormal(inputs.face)
+        candidates = geometry.enumerateDogBoneCandidates(body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+        skipped = []
+    elif inputs.selectionMode == options.DogBoneSelectionMode.EDGE:
+        body = inputs.edges[0].body
+        candidates, skipped = geometry.buildDogBoneCandidatesFromEdges(inputs.edges)
+    else:
+        body = inputs.body
+        plungeAxis = geometry.detectPlungeAxis(body)
+        candidates = geometry.enumerateDogBoneCandidates(body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+        skipped = []
+    return body, candidates, skipped
+
+
+def _format_skipped_dogbone_edges(skipped):
+    """Formats Edge mode's list of per-edge skip reasons into a short, deduplicated
+    summary for a messageBox, e.g. '2 edge(s) skipped: a convex or flat corner (not a
+    valid dog bone candidate)'."""
+    counts = {}
+    for reason in skipped:
+        counts[reason] = counts.get(reason, 0) + 1
+    return "\n".join(f"{count} edge(s) skipped: {reason}" for reason, count in counts.items())
+
+
 def preview_dogbones(payload):
-    """Calculates the dog-bone relief tool body for the selected body and displays it as a
-    temporary red/yellow ghost body, mirroring preview_joints()."""
+    """Calculates the dog-bone relief tool body for the active selection and displays it as
+    a temporary red/yellow ghost body, mirroring preview_joints()."""
     clear_preview()
     inputs = options.DogBoneFeatureInput()
     inputs.body = active_selections['dogboneBody']
+    inputs.face = active_selections['dogboneFace']
+    inputs.edges = active_selections['dogboneEdges']
     apply_dogbone_payload_settings(inputs, payload)
 
-    if not inputs.body:
+    if not _dogbone_has_selection(inputs):
         return False
 
     if not _all_expressions_valid(inputs.diameter, inputs.clearance, inputs.interference, inputs.angleTolerance):
@@ -571,11 +634,15 @@ def preview_dogbones(payload):
 
     try:
         radius = inputs.diameter.value / 2
-        plungeAxis = geometry.detectPlungeAxis(inputs.body)
-        candidates = geometry.enumerateDogBoneCandidates(inputs.body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+        # skipped (Edge mode's per-edge rejection reasons) is intentionally not reported
+        # here - this runs on every 500ms debounce tick, so a messageBox would spam a
+        # modal dialog for as long as an invalid pick stays selected. A rejected corner
+        # simply shows no preview circle, which is its own quiet feedback; the actual
+        # reasons are reported once, on Apply (see _create_dogbone_feature).
+        body, candidates, _skipped = _resolve_dogbone_candidates(inputs, radius)
         if not candidates:
             return True
-        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value, plungeAxis)
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
     except Exception:
         ui.messageBox(f'Could not compute dog bone preview:\n{traceback.format_exc()}')
         return False
@@ -608,7 +675,7 @@ def preview_dogbones(payload):
     return True
 
 
-def _create_dogbone_feature(inputs, body):
+def _create_dogbone_feature(inputs):
     """Computes the dog-bone relief tool body and creates the base/cut features for it.
     Runs entirely inside the hidden undo-group command's execute handler (see _run_grouped),
     so Fusion bundles every feature created here into a single native Undo entry.
@@ -626,18 +693,20 @@ def _create_dogbone_feature(inputs, body):
     regardless of the exact timing behavior of _run_grouped/cmd_def.execute()."""
     radius = inputs.diameter.value / 2
     try:
-        plungeAxis = geometry.detectPlungeAxis(body)
-        candidates = geometry.enumerateDogBoneCandidates(body, plungeAxis, inputs.angleTolerance.value, minWallExtent=radius)
+        body, candidates, skipped = _resolve_dogbone_candidates(inputs, radius)
     except Exception:
         ui.messageBox(f'Could not compute dog bones:\n{traceback.format_exc()}')
         return
 
     if not candidates:
-        ui.messageBox("No qualifying interior corners were found on the selected body.")
+        message = "No qualifying interior corners were found in the current selection."
+        if skipped:
+            message += "\n\n" + _format_skipped_dogbone_edges(skipped)
+        ui.messageBox(message)
         return
 
     try:
-        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value, plungeAxis)
+        tool = geometry.applyDogBonesToBody(candidates, inputs.style, radius, inputs.clearance.value, inputs.interference.value)
     except Exception:
         ui.messageBox(f'Could not build dog bone geometry:\n{traceback.format_exc()}')
         return
@@ -684,25 +753,30 @@ def _create_dogbone_feature(inputs, body):
 
     design.designType = prevType
 
+    if skipped:
+        ui.messageBox(f"Applied dog bones to {len(candidates)} corner(s).\n\n" + _format_skipped_dogbone_edges(skipped))
+
 
 def execute_dogbones(payload):
-    """Parses HTML settings, merges with the active dog-bone body selection, and applies
-    the dog bone relief operation."""
+    """Parses HTML settings, merges with the active dog-bone selection (Body/Face/Edge
+    mode), and applies the dog bone relief operation."""
     try:
         clear_preview()
         inputs = options.DogBoneFeatureInput()
         inputs.body = active_selections['dogboneBody']
+        inputs.face = active_selections['dogboneFace']
+        inputs.edges = active_selections['dogboneEdges']
         apply_dogbone_payload_settings(inputs, payload)
 
-        if not inputs.body:
-            ui.messageBox("Please select a body to relieve.")
+        if not _dogbone_has_selection(inputs):
+            ui.messageBox(_dogbone_selection_message(inputs))
             return False
 
         if not _all_expressions_valid(inputs.diameter, inputs.clearance, inputs.interference, inputs.angleTolerance):
             ui.messageBox("One or more dimension fields contains an invalid value. Please fix it before applying.")
             return False
 
-        _run_grouped(lambda: _create_dogbone_feature(inputs, inputs.body), 'FJL Apply Dog Bones')
+        _run_grouped(lambda: _create_dogbone_feature(inputs), 'FJL Apply Dog Bones')
 
         inputs.writeDefaults()
         return True
@@ -723,7 +797,7 @@ class SelectionCommandExecuteHandler(adsk.core.CommandEventHandler):
         global active_selections
         selections = [self.sel_input.selection(i).entity for i in range(self.sel_input.selectionCount)]
 
-        if self.target in ('direction', 'extendSource', 'extendTargetFace', 'dogboneBody'):
+        if self.target in ('direction', 'extendSource', 'extendTargetFace', 'dogboneBody', 'dogboneFace'):
             active_selections[self.target] = selections[0] if selections else None
         else:
             active_selections[self.target] = selections
@@ -773,6 +847,13 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 prompt = 'Select the face to extend to, then click OK.'
             elif self.target == 'dogboneBody':
                 prompt = 'Select the body to relieve, then click OK.'
+            elif self.target == 'dogboneFace':
+                prompt = 'Select a face whose normal sets the plunge axis, then click OK.'
+            elif self.target == 'dogboneEdges':
+                prompt = ('Select one or more concave interior corner edges to relieve, then click OK.\n'
+                           'At a notch mouth, the true corner edge and a nearby convex edge can be easy to mix up:\n'
+                           '- Kerf comp nonzero: turn on hidden-edge visibility to tell them apart.\n'
+                           '- Kerf comp at zero: temporarily hide the notched body so only the correct edges are pickable.')
 
             selInput = cmd.commandInputs.addSelectionInput(f'sel_{self.target}', f'Select {TARGET_LABELS[self.target]}', prompt)
 
@@ -791,6 +872,12 @@ class SelectionCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             elif self.target == 'dogboneBody':
                 selInput.addSelectionFilter('SolidBodies')
                 selInput.setSelectionLimits(0, 1)
+            elif self.target == 'dogboneFace':
+                selInput.addSelectionFilter('PlanarFaces')
+                selInput.setSelectionLimits(0, 1)
+            elif self.target == 'dogboneEdges':
+                selInput.addSelectionFilter('LinearEdges')
+                selInput.setSelectionLimits(0, 0)
             else:
                 selInput.addSelectionFilter('SolidBodies')
                 selInput.setSelectionLimits(0, 0) # 0 allows clearing selections
@@ -841,7 +928,8 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
             data = json.loads(html_args.data)
             action = data.get('action')
 
-            if action in ('select_body0', 'select_body1', 'select_direction', 'select_dogboneBody'):
+            if action in ('select_body0', 'select_body1', 'select_direction', 'select_dogboneBody',
+                          'select_dogboneFace', 'select_dogboneEdges'):
                 target = action.replace('select_', '')
                 cmd_def_id = f'FJL_Select_{target}'
 
@@ -904,11 +992,15 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
 
             elif action == 'clear_dogbone_selections':
                 active_selections['dogboneBody'] = None
+                active_selections['dogboneFace'] = None
+                active_selections['dogboneEdges'] = []
                 clear_preview()
 
                 palette = ui.palettes.itemById(palette_id)
                 if palette:
                     palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'dogboneBody', 'count': 0}))
+                    palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'dogboneFace', 'count': 0}))
+                    palette.sendInfoToHTML('selection_updated', json.dumps({'target': 'dogboneEdges', 'count': 0}))
 
             elif action == 'save_preset':
                 presets = load_presets_dict()
@@ -1167,7 +1259,7 @@ def run(context):
         handlers.append(onUndoGroupCreated)
 
         # Pre-register Selection Commands
-        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody', 'dogboneFace', 'dogboneEdges']:
             c_id = f'FJL_Select_{target}'
             cdef = ui.commandDefinitions.itemById(c_id)
             if cdef: cdef.deleteMe()
@@ -1190,7 +1282,7 @@ def stop(context):
         if ui.palettes.itemById(palette_id): ui.palettes.itemById(palette_id).deleteMe()
         if ui.commandDefinitions.itemById(command_id): ui.commandDefinitions.itemById(command_id).deleteMe()
         if ui.commandDefinitions.itemById(undo_group_command_id): ui.commandDefinitions.itemById(undo_group_command_id).deleteMe()
-        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody']:
+        for target in ['body0', 'body1', 'direction', 'extendSource', 'extendTargetFace', 'dogboneBody', 'dogboneFace', 'dogboneEdges']:
             c_id = f'FJL_Select_{target}'
             if ui.commandDefinitions.itemById(c_id): ui.commandDefinitions.itemById(c_id).deleteMe()
         panel = ui.allToolbarPanels.itemById('SolidModifyPanel')
