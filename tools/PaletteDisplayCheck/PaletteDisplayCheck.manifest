@@ -1,0 +1,10 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "script",
+    "author": "Ed Johnson",
+    "description": {
+        "": "Reports monitor layout, Fusion's display and the saved Finger Joints Live palette position."
+    },
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}

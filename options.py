@@ -103,6 +103,9 @@ class FingerJointFeatureInput(object):
         self.paletteHeight = 600
         self.paletteLeft = 100
         self.paletteTop = 100
+        # Monitor arrangement at the time left/top were saved (see display_utils.py) -
+        # lets a restore tell "still on the same monitors" from "layout changed since".
+        self.paletteDisplayLayout = ''
         self.readDefaults()
 
     def writeDefaults(self):
@@ -128,6 +131,7 @@ class FingerJointFeatureInput(object):
             'paletteHeight': self.paletteHeight,
             'paletteLeft': self.paletteLeft,
             'paletteTop': self.paletteTop,
+            'paletteDisplayLayout': self.paletteDisplayLayout,
         }
         with open(self.DEFAULTS_FILENAME, 'w', encoding='UTF-8') as json_file:
             json.dump(defaultData, json_file, ensure_ascii=False)
@@ -171,6 +175,7 @@ class FingerJointFeatureInput(object):
         self.paletteHeight = defaultData.get('paletteHeight', self.paletteHeight)
         self.paletteLeft = defaultData.get('paletteLeft', self.paletteLeft)
         self.paletteTop = defaultData.get('paletteTop', self.paletteTop)
+        self.paletteDisplayLayout = defaultData.get('paletteDisplayLayout', self.paletteDisplayLayout)
 
 
 # Settings for the standalone "Dog Bone" operation, applied as a post-process to an

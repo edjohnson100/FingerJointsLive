@@ -2,6 +2,11 @@
 
 All notable changes to FingerJointsLive are documented here. See [README.md](README.md) for current usage and installation instructions.
 
+## v1.4.1 — 2026-09-07
+
+* **Fixed: palette invisible on a second monitor.** Fusion won't draw a floating palette outside the display its own main window occupies — if the palette was last parked on a monitor that isn't the one Fusion opens on next time (a docking-station monitor that's unplugged, a laptop undocked, etc.), the saved position was still technically valid but Fusion would refuse to draw it there, making the palette appear to vanish until Fusion's window was dragged to match. The add-in now reads the real display layout and Fusion's own window position from the OS (no third-party dependencies) and remaps a saved position onto Fusion's actual display when they don't match, keeping the palette's relative position on screen.
+* Added a standalone `PaletteDisplayCheck` diagnostic script (`tools/PaletteDisplayCheck/`) for troubleshooting: run it from Fusion's Scripts and Add-Ins dialog to see the detected monitor layout, Fusion's window position, and where the palette would open.
+
 ## v1.4.0 — 2026-08-13
 
 * **Standalone Dog Bone corner relief:** A new Dogbone tab adds a post-process corner-relief operation for router-cut joints, applied to a body's real, already-cut geometry rather than baked into finger-joint generation. Pick corners by **Body** (auto-detects the router's plunge axis from the body's shape), **Face** (you specify the axis directly — useful when a body isn't globally axis-aligned), or **Edge** (pick individual corners by hand). All three modes support picking multiple bodies/faces/edges at once, and relief is applied correctly even when picks span more than one body.

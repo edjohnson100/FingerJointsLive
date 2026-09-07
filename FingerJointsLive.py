@@ -25,6 +25,7 @@ import time
 
 from . import options
 from . import geometry
+from . import display_utils
 
 app = None
 ui = None
@@ -1282,6 +1283,9 @@ def save_palette_geometry():
         prefs.paletteHeight = palette.height
         prefs.paletteLeft = palette.left
         prefs.paletteTop = palette.top
+        # Recorded so a restore can tell "same monitors as last time" from "the
+        # second screen is gone / rearranged" (see display_utils.py).
+        prefs.paletteDisplayLayout = display_utils.layout_signature()
         prefs.writeDefaults()
     except:
         pass
@@ -1310,7 +1314,13 @@ class MyCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                                        prefs.paletteWidth, prefs.paletteHeight)
             palette.dockingState = prefs.paletteDockingState
             if prefs.paletteDockingState == adsk.core.PaletteDockingStates.PaletteDockStateFloating:
-                palette.setPosition(prefs.paletteLeft, prefs.paletteTop)
+                # A saved left/top can be a valid point on a connected monitor and
+                # still be invisible: Fusion will not draw a floating palette that
+                # sits outside the display its own main window occupies. Remap onto
+                # Fusion's actual display when they differ (see display_utils.py).
+                left, top, _report = display_utils.resolve_palette_position(
+                    prefs.paletteLeft, prefs.paletteTop, prefs.paletteWidth, prefs.paletteHeight)
+                palette.setPosition(left, top)
 
             onHtmlEvent = MyHTMLEventHandler()
             palette.incomingFromHTML.add(onHtmlEvent)
