@@ -95,6 +95,12 @@ class FingerJointFeatureInput(object):
         self.gap = FusionExpression("0 mm")
         self.gapToPart = FusionExpression("0 mm")
         self.isPreviewEnabled = True
+        # How strongly the live preview washes the selected bodies in body0's/body1's
+        # highlight colors (see FingerJointsLive.py's preview_joints) - purely a display
+        # setting, doesn't affect the generated joint. Mapped to a custom-graphics alpha
+        # value there since "dark" needs to stay usable against a wide range of material
+        # appearances, not just Fusion's default light gray.
+        self.previewOpacity = 'medium'
         self.theme = 'default'
         self.collapsedSections = {}
         # Palette window geometry (remembered across sessions).
@@ -124,6 +130,7 @@ class FingerJointFeatureInput(object):
             'gap': self.gap.expression,
             'gapToPart': self.gapToPart.expression,
             'isPreviewEnabled': self.isPreviewEnabled,
+            'previewOpacity': self.previewOpacity,
             'theme': self.theme,
             'collapsedSections': self.collapsedSections,
             'paletteDockingState': self.paletteDockingState,
@@ -168,6 +175,7 @@ class FingerJointFeatureInput(object):
         self.gap = expressionOrDefault(defaultData.get('gap'), self.gap)
         self.gapToPart = expressionOrDefault(defaultData.get('gapToPart'), self.gapToPart)
         self.isPreviewEnabled = defaultData.get('isPreviewEnabled', self.isPreviewEnabled)
+        self.previewOpacity = defaultData.get('previewOpacity', self.previewOpacity)
         self.theme = defaultData.get('theme', self.theme)
         self.collapsedSections = defaultData.get('collapsedSections', self.collapsedSections)
         self.paletteDockingState = defaultData.get('paletteDockingState', self.paletteDockingState)

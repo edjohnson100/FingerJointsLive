@@ -2,6 +2,12 @@
 
 All notable changes to FingerJointsLive are documented here. See [README.md](README.md) for current usage and installation instructions.
 
+## v1.5.0 — 2026-09-11
+
+* **Fixed: dovetail taper axis on coplanar/inline splices.** Through-dovetail generation picked the taper axis by comparing raw overlap dimensions ("smaller wins"), which only holds for corner joints — an inline splice joining two panels on the same plane could pick panel thickness instead of the actual splice width. The axis is now chosen with a geometric test (is this axis flush with the original body's own bounds?) instead of a magnitude comparison, matching the approach already used for Dog Bone plunge-axis detection.
+* **Colorblind-safe, per-body preview coloring:** The live preview now shades each panel's tool bodies and a faint wash over the full selected body in one of two colorblind-safe (Okabe-Ito) colors — orange for body0, blue for body1 — so it's clear at a glance which color belongs to which panel, and which panel will end up with fingers vs. notches.
+* **Preview Opacity toggle (Light/Medium/Dark):** Controls how strongly the preview wash shows through on the selected bodies, so it stays visible against material appearances that are close to the preview's own orange/blue palette. Persists with the rest of your settings.
+
 ## v1.4.1 — 2026-09-07
 
 * **Fixed: palette invisible on a second monitor.** Fusion won't draw a floating palette outside the display its own main window occupies — if the palette was last parked on a monitor that isn't the one Fusion opens on next time (a docking-station monitor that's unplugged, a laptop undocked, etc.), the saved position was still technically valid but Fusion would refuse to draw it there, making the palette appear to vanish until Fusion's window was dragged to match. The add-in now reads the real display layout and Fusion's own window position from the OS (no third-party dependencies) and remaps a saved position onto Fusion's actual display when they don't match, keeping the palette's relative position on screen.

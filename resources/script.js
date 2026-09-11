@@ -289,6 +289,7 @@ function getPayload() {
         minFingerSize: document.getElementById('minFingerSize').value,
         gap: document.getElementById('gap').value,
         gapToPart: document.getElementById('gapToPart').value,
+        previewOpacity: document.getElementById('previewOpacity').value,
         collapsedSections: {
             buttjoint: document.getElementById('section-buttjoint').classList.contains('collapsed'),
             config: document.getElementById('section-config').classList.contains('collapsed'),
@@ -524,6 +525,7 @@ window.fusionJavaScriptHandler = {
                 if (defaults.minFingerSize) document.getElementById('minFingerSize').value = defaults.minFingerSize;
                 if (defaults.gap) document.getElementById('gap').value = defaults.gap;
                 if (defaults.gapToPart) document.getElementById('gapToPart').value = defaults.gapToPart;
+                if (defaults.previewOpacity) document.getElementById('previewOpacity').value = defaults.previewOpacity;
                 if (defaults.selectionMode) document.getElementById('dogboneSelectionMode').value = defaults.selectionMode;
                 if (defaults.style) document.getElementById('dogboneStyle').value = defaults.style;
                 if (defaults.diameter) document.getElementById('dogboneDiameter').value = defaults.diameter;

@@ -34,6 +34,9 @@ palette_id = 'FingerJointsLive_Palette'
 command_id = 'FingerJointsLive_Launcher'
 preview_group_id = 'FingerJointsLive_Preview'
 undo_group_command_id = 'FingerJointsLive_UndoGroup'
+# 0-255 custom-graphics alpha for the preview's body0/body1 wash - "dark" is well short of
+# 255 so the underlying model (grain, existing selection highlight) never fully disappears.
+PREVIEW_WASH_ALPHA = {'light': 64, 'medium': 128, 'dark': 192}
 
 def _read_manifest_version():
     manifest_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'FingerJointsLive.manifest')
@@ -292,7 +295,7 @@ def close_extend_loop_group():
 
 
 def clear_preview():
-    """Removes any temporary red preview graphics from the canvas."""
+    """Removes any temporary joint-preview graphics from the canvas."""
     try:
         if app and app.activeProduct:
             root = app.activeProduct.rootComponent
@@ -331,6 +334,7 @@ def apply_payload_settings(inputs, payload):
     if payload.get('gap'): inputs.gap.expression = payload.get('gap')
     if payload.get('gapToPart'): inputs.gapToPart.expression = payload.get('gapToPart')
     if payload.get('dovetailAngle'): inputs.dovetailAngle.expression = payload.get('dovetailAngle')
+    inputs.previewOpacity = payload.get('previewOpacity', inputs.previewOpacity)
 
 
 def apply_dogbone_payload_settings(inputs, payload):
@@ -345,7 +349,9 @@ def apply_dogbone_payload_settings(inputs, payload):
 
 
 def preview_joints(payload):
-    """Calculates tool bodies and displays them as temporary red blocks."""
+    """Calculates tool bodies and displays them as temporary orange/blue preview graphics,
+    per-body (body0 vs. body1), including a faint wash over the full selected bodies so
+    it's clear which panel each joint-color segment belongs to."""
     clear_preview()
     inputs = options.FingerJointFeatureInput()
 
@@ -385,34 +391,64 @@ def preview_joints(payload):
         ui.messageBox(f'Could not compute joint preview:\n{traceback.format_exc()}')
         return False
             
+    des = app.activeProduct
+    root = des.rootComponent
+    cgGroup = root.customGraphicsGroups.add()
+    cgGroup.id = preview_group_id
+
+    # Orange/blue (Okabe-Ito colorblind-safe palette) so body0's side and body1's side read
+    # as distinct even for red-green color blindness, where a yellow-vs-red or
+    # orange-vs-red scheme would not. The same pair also washes over the full selected
+    # bodies (very faint, so the underlying model stays readable) so it's obvious which
+    # panel each joint-color segment actually belongs to - the joint alone, out of context,
+    # doesn't show that.
+    #
+    # t0 is cut OUT of body0 (see _create_joint_features), so what's left standing on body0
+    # after the real cut has t1's shape (t0/t1 are exact complements within the same shared
+    # overlap volume - see createToolBodies), and symmetrically body1 ends up with t0's
+    # shape. So t0 (which predicts body1's resulting tabs) is drawn in body1's wash color,
+    # and t1 (which predicts body0's resulting tabs) in body0's - matching each tool to the
+    # body it will visually resemble post-cut, not the body it's actually subtracted from.
+    face_color0 = adsk.core.Color.create(86, 180, 233, 150)  # t0 -> body1's Blue
+    face_effect0 = adsk.fusion.CustomGraphicsSolidColorEffect.create(face_color0)
+    edge_color0 = adsk.core.Color.create(86, 180, 233, 255)  # t0 -> body1's Blue
+    edge_effect0 = adsk.fusion.CustomGraphicsSolidColorEffect.create(edge_color0)
+
+    face_color1 = adsk.core.Color.create(230, 159, 0, 150)   # t1 -> body0's Orange
+    face_effect1 = adsk.fusion.CustomGraphicsSolidColorEffect.create(face_color1)
+    edge_color1 = adsk.core.Color.create(230, 159, 0, 255)   # t1 -> body0's Orange
+    edge_effect1 = adsk.fusion.CustomGraphicsSolidColorEffect.create(edge_color1)
+
+    washAlpha = PREVIEW_WASH_ALPHA.get(inputs.previewOpacity, PREVIEW_WASH_ALPHA['medium'])
+    body_wash_color0 = adsk.core.Color.create(230, 159, 0, washAlpha)  # Orange wash (body0)
+    body_wash_effect0 = adsk.fusion.CustomGraphicsSolidColorEffect.create(body_wash_color0)
+    body_wash_color1 = adsk.core.Color.create(86, 180, 233, washAlpha)  # Blue wash (body1)
+    body_wash_effect1 = adsk.fusion.CustomGraphicsSolidColorEffect.create(body_wash_color1)
+
+    for b0 in bodies0:
+        cg = cgGroup.addBRepBody(b0)
+        cg.color = body_wash_effect0
+    for b1 in bodies1:
+        cg = cgGroup.addBRepBody(b1)
+        cg.color = body_wash_effect1
+
     if all_tool_bodies:
-        des = app.activeProduct
-        root = des.rootComponent
-        cgGroup = root.customGraphicsGroups.add()
-        cgGroup.id = preview_group_id
-        
-        face_color = adsk.core.Color.create(255, 255, 0, 150) # Translucent Yellow
-        face_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(face_color)
-        
-        edge_color = adsk.core.Color.create(255, 0, 0, 255) # Solid Red
-        edge_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(edge_color)
-        
         for t0, t1 in all_tool_bodies:
             cg0 = cgGroup.addBRepBody(t0)
-            cg0.color = face_effect
+            cg0.color = face_effect0
             cg1 = cgGroup.addBRepBody(t1)
-            cg1.color = face_effect
-            
-            # Explicitly draw thick red edges
-            for tool_body in (t0, t1):
+            cg1.color = face_effect1
+
+            # Explicitly draw thick edges in each body's own color
+            for tool_body, edge_effect in ((t0, edge_effect0), (t1, edge_effect1)):
                 for edge in tool_body.edges:
                     try:
                         crv = cgGroup.addCurve(edge.geometry)
                         crv.color = edge_effect
                         crv.weight = 2
                     except: pass
-            
-        app.activeViewport.refresh()
+
+    app.activeViewport.refresh()
 
     if not success:
         ui.messageBox("Could not compute some joints. Double-check dimensions and overlaps.")
@@ -1147,6 +1183,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     'minFingerSize': defaults.minFingerSize.expression,
                     'gap': defaults.gap.expression,
                     'gapToPart': defaults.gapToPart.expression,
+                    'previewOpacity': defaults.previewOpacity,
                     'isPreviewEnabled': defaults.isPreviewEnabled,
                     'theme': defaults.theme,
                     'collapsedSections': defaults.collapsedSections
@@ -1224,6 +1261,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                     'minFingerSize': defaults.minFingerSize.expression,
                     'gap': defaults.gap.expression,
                     'gapToPart': defaults.gapToPart.expression,
+                    'previewOpacity': defaults.previewOpacity,
                     'isPreviewEnabled': defaults.isPreviewEnabled,
                     'theme': defaults.theme,
                     'collapsedSections': defaults.collapsedSections

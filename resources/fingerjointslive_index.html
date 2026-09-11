@@ -167,6 +167,17 @@
                         <input type="text" id="gapToPart" value="0 mm" oninput="autoPreview()" style="width: 80px;">
                     </div>
                 </div>
+
+                <div class="data-row">
+                    <div class="row-label" title="How strongly the preview washes body0 (orange) and body1 (blue) so you can tell which panel each joint-color segment belongs to. Purely visual - has no effect on the generated joint.">Preview Opacity</div>
+                    <div class="row-controls">
+                        <select id="previewOpacity" onchange="autoPreview()" style="width: 130px;">
+                            <option value="light">Light</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                </div>
                 <details style="margin: 4px 0 0;">
                     <summary style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); cursor: pointer;">How Gap Between Fingers &amp; Gap To Part work</summary>
                     <p style="font-size: calc(var(--font-size-base) - 2px); color: var(--text-sub); margin: 4px 0 0;">
@@ -317,7 +328,7 @@
         </div>
     </div>
 
-    <div class="version-footer">Finger Joints Live<br><span id="footerVersion">v1.4.0</span>, August 2026</div>
+    <div class="version-footer">Finger Joints Live<br><span id="footerVersion">v1.5.0</span>, September 2026</div>
 
     <!-- Quick Help Modal -->
     <div id="helpModal" class="modal-overlay" onclick="hideHelp(event)">

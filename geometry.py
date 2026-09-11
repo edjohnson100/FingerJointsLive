@@ -196,7 +196,41 @@ def _addDogBones(temporaryBRepManager, targetBody, slices, minz, maxz, dogBoneIn
                 temporaryBRepManager.booleanOperation(targetBody, cylinder, adsk.fusion.BooleanTypes.UnionBooleanType)
 
 
-def _dovetailCombGeometry(body, inputs):
+def _dovetailDepthIsX(overlapLocalBB, originalBody, coordinateSystem):
+    """Picks which of the overlap's two non-row axes (x, y) is the dovetail's taper/depth
+    axis, using the same "which axis is fully open against the original body" test as
+    _computeDogBoneAxisInfo (see its docstring) instead of comparing raw sizes. The axis
+    where originalBody's own bound matches the overlap's bound on both sides is the plunge
+    axis - a bit passes straight through it, e.g. panel thickness on an ordinary corner
+    joint - and that axis is never the taper axis; the OTHER non-row axis is, regardless of
+    which one happens to be numerically smaller.
+
+    This distinction is invisible for a corner joint, where the taper axis also happens to
+    be a small panel thickness, so "smaller wins" looks right there. It breaks for a
+    coplanar/inline splice: the plunge axis is still the thin panel thickness, but the true
+    taper axis is the (much larger) splice overlap width - a plain size comparison picks
+    the thin plunge axis instead and tapers the wrong way.
+
+    Falls back to the old smaller-wins comparison if originalBody's bounds don't cleanly
+    identify a single open axis (neither side matches, or both do)."""
+    temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
+    bodyLocal = temporaryBRepManager.copy(originalBody)
+    coordinateSystem.transformToLocalCoordinates(bodyLocal)
+    bodyBB = bodyLocal.boundingBox
+
+    epsilon = 0.00001
+    omin, omax = overlapLocalBB.minPoint, overlapLocalBB.maxPoint
+    bmin, bmax = bodyBB.minPoint, bodyBB.maxPoint
+
+    xOpen = abs(bmin.x - omin.x) <= epsilon and abs(bmax.x - omax.x) <= epsilon
+    yOpen = abs(bmin.y - omin.y) <= epsilon and abs(bmax.y - omax.y) <= epsilon
+
+    if xOpen != yOpen:
+        return yOpen
+    return (omax.x - omin.x) <= (omax.y - omin.y)
+
+
+def _dovetailCombGeometry(body, inputs, coordinateSystem):
     """Shared setup for the dovetail comb builders: the depth axis/extent, row extent, and
     angle trig, all derived once from the (already-local-coordinates) overlap body so the
     finger comb and the full row slab agree exactly on bounds."""
@@ -210,7 +244,7 @@ def _dovetailCombGeometry(body, inputs):
     width = maxy - miny + slack
     size = maxz - minz
 
-    depthIsX = (maxx - minx) <= (maxy - miny)
+    depthIsX = _dovetailDepthIsX(bb, inputs.body0, coordinateSystem)
     if depthIsX:
         Amin, Amax = minx, maxx
         wCenter = cy
@@ -918,7 +952,7 @@ def createToolBodies(inputs):
         return False
 
     if inputs.jointType == JointType.DOVETAIL:
-        geom = _dovetailCombGeometry(overlap, inputs)
+        geom = _dovetailCombGeometry(overlap, inputs, coordinateSystem)
         fingerRawComb = _buildDovetailComb(fingerDimensions, geom)
         if fingerRawComb is None:
             return False
