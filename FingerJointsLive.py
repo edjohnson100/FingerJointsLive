@@ -295,7 +295,7 @@ def close_extend_loop_group():
 
 
 def clear_preview():
-    """Removes any temporary joint-preview graphics from the canvas."""
+    """Removes any temporary preview graphics from the canvas."""
     try:
         if app and app.activeProduct:
             root = app.activeProduct.rootComponent
@@ -434,6 +434,16 @@ def preview_joints(payload):
 
     if all_tool_bodies:
         for t0, t1 in all_tool_bodies:
+            # t0/t1 are CUT tools (the material Fusion will remove), not the material that
+            # remains - createCutFeature always subtracts. t0 is cut away from body0 and, by
+            # construction (see defineToolBodyDimensions: "the tool for cutting fingers
+            # consists of all places where there are notches or gaps"), occupies exactly the
+            # row intervals where body1 keeps its own solid material once the real cut runs -
+            # and t1's cut-away shape likewise matches where body0 stays solid. So t0 is
+            # colored with body1's color and t1 with body0's color: each ghost is colored for
+            # the body its position will actually end up belonging to, not the body its tool
+            # variable happens to be cut from - giving an accurate preview of how the finished
+            # joint interlocks instead of a preview of what gets thrown away.
             cg0 = cgGroup.addBRepBody(t0)
             cg0.color = face_effect0
             cg1 = cgGroup.addBRepBody(t1)

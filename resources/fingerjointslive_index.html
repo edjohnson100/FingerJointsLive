@@ -70,6 +70,7 @@
                         <select id="jointType" onchange="updateVisibility(); autoPreview()" style="width: 130px;">
                             <option value="box">Box / Finger</option>
                             <option value="through dovetail">Through Dovetail</option>
+                            <option value="coplanar dovetail">Coplanar Dovetail</option>
                         </select>
                     </div>
                 </div>
@@ -336,8 +337,8 @@
             <h3>Quick Help</h3>
             <div class="modal-label" style="font-weight: normal; margin-top: 10px; line-height: 1.5; font-size: var(--font-size-base);">
                 <ul style="padding-left: 20px; margin: 0;">
-                    <li style="margin-bottom: 8px;"><strong>1st Body/Bodies:</strong> Select one or multiple bodies where the <em>fingers</em> will be placed.</li>
-                    <li style="margin-bottom: 8px;"><strong>2nd Body/Bodies:</strong> Select one or multiple bodies where the <em>notches</em> will be placed.</li>
+                    <li style="margin-bottom: 8px;"><strong>1st Body/Bodies:</strong> Select one or multiple bodies where the <em>fingers</em> will be placed. Shown in blue in the preview.</li>
+                    <li style="margin-bottom: 8px;"><strong>2nd Body/Bodies:</strong> Select one or multiple bodies where the <em>notches</em> will be placed. Shown in orange in the preview.</li>
                     <li style="margin-bottom: 8px;"><strong>Direction:</strong> Select an edge to define the joint's orientation. Leave this empty to automatically use the longest overlapping edge.</li>
                 </ul>
             </div>

@@ -256,8 +256,9 @@ function updateVisibility() {
     toggleRow('grp-fixedFingerSize', dynamicSizeType === 'fixed finger size');
     toggleRow('grp-minNotchSize', !isFixedNum && dynamicSizeType === 'fixed finger size');
     toggleRow('grp-minFingerSize', !isFixedNum && dynamicSizeType !== 'fixed finger size');
-    toggleRow('grp-dovetailAngle', jointType === 'through dovetail');
-    toggleRow('grp-reverseTaper', jointType === 'through dovetail');
+    const isDovetailType = jointType === 'through dovetail' || jointType === 'coplanar dovetail';
+    toggleRow('grp-dovetailAngle', isDovetailType);
+    toggleRow('grp-reverseTaper', isDovetailType);
     toggleRow('grp-dogboneInterference', dogboneStyle === 'minimal corner');
     toggleElement('btn-dogboneBody', dogboneSelectionMode === 'body');
     toggleElement('btn-dogboneFace', dogboneSelectionMode === 'face');

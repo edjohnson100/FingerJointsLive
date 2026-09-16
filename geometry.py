@@ -196,38 +196,50 @@ def _addDogBones(temporaryBRepManager, targetBody, slices, minz, maxz, dogBoneIn
                 temporaryBRepManager.booleanOperation(targetBody, cylinder, adsk.fusion.BooleanTypes.UnionBooleanType)
 
 
-def _dovetailDepthIsX(overlapLocalBB, originalBody, coordinateSystem):
-    """Picks which of the overlap's two non-row axes (x, y) is the dovetail's taper/depth
-    axis, using the same "which axis is fully open against the original body" test as
-    _computeDogBoneAxisInfo (see its docstring) instead of comparing raw sizes. The axis
-    where originalBody's own bound matches the overlap's bound on both sides is the plunge
-    axis - a bit passes straight through it, e.g. panel thickness on an ordinary corner
-    joint - and that axis is never the taper axis; the OTHER non-row axis is, regardless of
-    which one happens to be numerically smaller.
+def _dovetailReachAxisIsX(overlapLocalBB, body0, body1, coordinateSystem):
+    """Topologically identifies which of the overlap's two non-row axes (if either) is a
+    COPLANAR_DOVETAIL splice-reach axis, as opposed to a real panel-thickness axis - used
+    instead of comparing the two axes' raw magnitudes because a magnitude comparison breaks
+    down whenever the splice reach happens to equal the panel thickness (a square overlap,
+    not even an unusual design choice), where it degenerates into an arbitrary tie-break.
 
-    This distinction is invisible for a corner joint, where the taper axis also happens to
-    be a small panel thickness, so "smaller wins" looks right there. It breaks for a
-    coplanar/inline splice: the plunge axis is still the thin panel thickness, but the true
-    taper axis is the (much larger) splice overlap width - a plain size comparison picks
-    the thin plunge axis instead and tapers the wrong way.
+    A true thickness axis is one where some panel is that thin EVERYWHERE, not just inside
+    the joint: the overlap's extent on that axis matches the same axis's extent on that
+    panel's own, un-intersected bounding box. A true reach axis is the opposite - both
+    bodies extend well past the overlap there, so the overlap's extent on that axis is set
+    purely by how deep the joint was designed to reach, not by any panel's real thickness.
+    This mirrors _computeDogBoneAxisInfo's "does this body's own bound match the overlap's
+    bound" openness check, reusing that technique rather than inventing a new one.
 
-    Falls back to the old smaller-wins comparison if originalBody's bounds don't cleanly
-    identify a single open axis (neither side matches, or both do)."""
+    Returns True/False (whichever axis is the reach axis) when exactly one axis is
+    reach-like and the other is thickness-like - the normal, unambiguous inline-splice
+    case. Returns None when both axes are thickness-like (a plain corner - both non-row
+    axes are genuinely some panel's real thickness there, so there is no reach axis at
+    all) or both are reach-like (not expected for the intended use case); callers fall
+    back to the magnitude heuristic in either case."""
     temporaryBRepManager = adsk.fusion.TemporaryBRepManager.get()
-    bodyLocal = temporaryBRepManager.copy(originalBody)
-    coordinateSystem.transformToLocalCoordinates(bodyLocal)
-    bodyBB = bodyLocal.boundingBox
-
     epsilon = 0.00001
     omin, omax = overlapLocalBB.minPoint, overlapLocalBB.maxPoint
-    bmin, bmax = bodyBB.minPoint, bodyBB.maxPoint
 
-    xOpen = abs(bmin.x - omin.x) <= epsilon and abs(bmax.x - omax.x) <= epsilon
-    yOpen = abs(bmin.y - omin.y) <= epsilon and abs(bmax.y - omax.y) <= epsilon
+    def axisIsThicknessLike(axisMinAttr, axisMaxAttr):
+        oMinVal, oMaxVal = getattr(omin, axisMinAttr), getattr(omax, axisMaxAttr)
+        for originalBody in (body0, body1):
+            bodyLocal = temporaryBRepManager.copy(originalBody)
+            coordinateSystem.transformToLocalCoordinates(bodyLocal)
+            bb = bodyLocal.boundingBox
+            bMinVal, bMaxVal = getattr(bb.minPoint, axisMinAttr), getattr(bb.maxPoint, axisMaxAttr)
+            if abs(bMinVal - oMinVal) <= epsilon and abs(bMaxVal - oMaxVal) <= epsilon:
+                return True
+        return False
 
-    if xOpen != yOpen:
-        return yOpen
-    return (omax.x - omin.x) <= (omax.y - omin.y)
+    xIsThickness = axisIsThicknessLike('x', 'x')
+    yIsThickness = axisIsThicknessLike('y', 'y')
+
+    if xIsThickness and not yIsThickness:
+        return False  # Y is the reach axis
+    if yIsThickness and not xIsThickness:
+        return True  # X is the reach axis
+    return None  # both thickness-like (plain corner) or both reach-like: ambiguous
 
 
 def _dovetailCombGeometry(body, inputs, coordinateSystem):
@@ -244,7 +256,16 @@ def _dovetailCombGeometry(body, inputs, coordinateSystem):
     width = maxy - miny + slack
     size = maxz - minz
 
-    depthIsX = _dovetailDepthIsX(bb, inputs.body0, coordinateSystem)
+    depthIsX = (maxx - minx) <= (maxy - miny)
+    if inputs.jointType == JointType.COPLANAR_DOVETAIL:
+        # Prefer the topological reach-axis classification over the magnitude comparison
+        # above - see _dovetailReachAxisIsX's docstring for why magnitude alone can't be
+        # trusted (it degenerates into an arbitrary tie-break when the splice reach happens
+        # to equal the panel thickness). Only fall back to inverting the magnitude result
+        # when the classification is ambiguous (e.g. this joint type applied to a plain
+        # corner overlap, which isn't its intended use but shouldn't error out either).
+        reachIsX = _dovetailReachAxisIsX(bb, inputs.body0, inputs.body1, coordinateSystem)
+        depthIsX = reachIsX if reachIsX is not None else not depthIsX
     if depthIsX:
         Amin, Amax = minx, maxx
         wCenter = cy
@@ -951,7 +972,7 @@ def createToolBodies(inputs):
     if fingerDimensions is None or notchDimensions is None:
         return False
 
-    if inputs.jointType == JointType.DOVETAIL:
+    if inputs.jointType in (JointType.DOVETAIL, JointType.COPLANAR_DOVETAIL):
         geom = _dovetailCombGeometry(overlap, inputs, coordinateSystem)
         fingerRawComb = _buildDovetailComb(fingerDimensions, geom)
         if fingerRawComb is None:
