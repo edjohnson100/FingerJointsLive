@@ -19,8 +19,22 @@ class PlacementType:
 class JointType:
     BOX = 'box'
     DOVETAIL = 'through dovetail'
-    # Half-blind dovetails are a deferred follow-on; any shoulder-depth-style
-    # fields they need attach here as new additive values, not a rework of this enum.
+    # Same combinatorics/mechanics as DOVETAIL (identical _dovetailCombGeometry/_buildDovetailComb/
+    # _finalizeDovetailToolBody pipeline, dispatched together in createToolBodies) but with the
+    # depth (taper) axis chosen differently: DOVETAIL picks the SMALLER of the overlap's two non-row
+    # axes as depth (normally panel thickness), producing a taper that varies through the panel's
+    # thickness - a true 3D dovetail needing 5-axis or additive manufacturing. COPLANAR_DOVETAIL
+    # instead identifies the splice-reach axis topologically (see _dovetailReachAxisIsX in
+    # geometry.py) and tapers that one, keeping the cut a constant prismatic shape through the
+    # thickness - laser/CNC-cuttable - with the taper visible on the panel's wide face instead,
+    # matching the classic hand-cut "through dovetail" look. Kept as a separate joint type rather
+    # than an automatic choice for the same reason reverseTaper is a user toggle, not inferred: for
+    # an asymmetric-thickness corner joint, which non-row axis "should" taper is genuinely
+    # context-dependent and can't be determined from the overlap geometry alone.
+    COPLANAR_DOVETAIL = 'coplanar dovetail'
+    # Half-blind dovetails are a deferred follow-on; any shoulder-depth-style fields they need
+    # attach here as new additive values, not a rework of this enum - COPLANAR_DOVETAIL above is
+    # a second precedent for this additive convention.
 
 class DogBoneStyle:
     CORNER = 'corner'

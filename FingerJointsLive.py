@@ -291,7 +291,7 @@ def close_extend_loop_group():
 
 
 def clear_preview():
-    """Removes any temporary red preview graphics from the canvas."""
+    """Removes any temporary preview graphics from the canvas."""
     try:
         if app and app.activeProduct:
             root = app.activeProduct.rootComponent
@@ -344,7 +344,13 @@ def apply_dogbone_payload_settings(inputs, payload):
 
 
 def preview_joints(payload):
-    """Calculates tool bodies and displays them as temporary red blocks."""
+    """Calculates tool bodies and displays them as temporary ghost blocks colored by which
+    real body their position will end up belonging to once the cut runs - blue for 1st Body
+    (body0) material, orange for 2nd Body (body1) material - not by which body's cut tool
+    they literally are (see the comment above the color assignment for why those two are
+    NOT the same thing). Also washes the real 1st/2nd Body bodies themselves in the same
+    blue/orange at much lower opacity, so which body is which is obvious without hunting for
+    the (often thin) joint seam."""
     clear_preview()
     inputs = options.FingerJointFeatureInput()
 
@@ -389,28 +395,61 @@ def preview_joints(payload):
         root = des.rootComponent
         cgGroup = root.customGraphicsGroups.add()
         cgGroup.id = preview_group_id
-        
-        face_color = adsk.core.Color.create(255, 255, 0, 150) # Translucent Yellow
-        face_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(face_color)
-        
-        edge_color = adsk.core.Color.create(255, 0, 0, 255) # Solid Red
-        edge_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(edge_color)
-        
+
+        # Blue always means "this predicts 1st Body (body0) material," orange always means
+        # "this predicts 2nd Body (body1) material" - colorblind-safe complementary pair
+        # (doesn't rely on red-green discrimination), reused consistently below so the mapping
+        # is learnable at a glance.
+        body0_face_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(60, 130, 255, 150))  # Translucent blue
+        body0_edge_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(30, 90, 255, 255))  # Solid blue
+
+        body1_face_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(255, 150, 30, 150))  # Translucent orange
+        body1_edge_effect = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(255, 110, 0, 255))  # Solid orange
+
+        # A light wash over the whole 1st/2nd Body so it's obvious at a glance which real body
+        # is which without having to find and squint at the (often thin, easy-to-miss) joint
+        # seam itself. Kept much more translucent than the tool combs (alpha 60 vs. 150) so it
+        # reads as a tint rather than hiding the body's real shape/material, and added before
+        # the tool combs so the more saturated finger/notch detail still stands out on top.
+        body0_tint = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(60, 130, 255, 60))
+        body1_tint = adsk.fusion.CustomGraphicsSolidColorEffect.create(
+            adsk.core.Color.create(255, 150, 30, 60))
+        for b0 in bodies0:
+            cgBody = cgGroup.addBRepBody(b0)
+            cgBody.color = body0_tint
+        for b1 in bodies1:
+            cgBody = cgGroup.addBRepBody(b1)
+            cgBody.color = body1_tint
+
         for t0, t1 in all_tool_bodies:
+            # t0/t1 are CUT tools (the material Fusion will remove), not the material that
+            # remains - createCutFeature always subtracts. t0 is cut away from body0 and, by
+            # construction (see defineToolBodyDimensions: "the tool for cutting fingers
+            # consists of all places where there are notches or gaps"), occupies exactly the
+            # row intervals where body1 keeps its own solid material once the real cut runs -
+            # and t1's cut-away shape likewise matches where body0 stays solid. So t0 is
+            # colored with body1's color and t1 with body0's color: each ghost is colored for
+            # the body its position will actually end up belonging to, not the body its tool
+            # variable happens to be cut from - giving an accurate preview of how the finished
+            # joint interlocks instead of a preview of what gets thrown away.
             cg0 = cgGroup.addBRepBody(t0)
-            cg0.color = face_effect
+            cg0.color = body1_face_effect
             cg1 = cgGroup.addBRepBody(t1)
-            cg1.color = face_effect
-            
-            # Explicitly draw thick red edges
-            for tool_body in (t0, t1):
+            cg1.color = body0_face_effect
+
+            for tool_body, edge_effect in ((t0, body1_edge_effect), (t1, body0_edge_effect)):
                 for edge in tool_body.edges:
                     try:
                         crv = cgGroup.addCurve(edge.geometry)
                         crv.color = edge_effect
                         crv.weight = 2
                     except: pass
-            
+
         app.activeViewport.refresh()
 
     if not success:

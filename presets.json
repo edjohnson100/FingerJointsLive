@@ -59,26 +59,7 @@
         "gap": "0 mm",
         "gapToPart": "0 mm"
     },
-    "20mm EQ FIngersOut": {
-        "placementType": "fingers outside",
-        "dynamicSizeType": "equal notch and finger size",
-        "jointType": "box",
-        "dovetailAngle": "10",
-        "reverseTaper": false,
-        "isNumberOfFingersFixed": false,
-        "fixedNumFingers": "3",
-        "fixedNotchSize": "20 mm",
-        "fixedFingerSize": "20 mm",
-        "minNotchSize": "20 mm",
-        "minFingerSize": "20 mm",
-        "gap": "0 mm",
-        "gapToPart": "0 mm",
-        "collapsedSections": {
-            "buttjoint": false,
-            "config": false
-        }
-    },
-    "Fixed 3_FingersOut": {
+   "Fixed 3_FingersOut": {
         "placementType": "fingers outside",
         "dynamicSizeType": "equal notch and finger size",
         "jointType": "box",
@@ -98,7 +79,7 @@
             "thememanager": false
         }
     },
-    "Fixed 2_FingersOUT": {
+    "Fixed 2_FingersOut": {
         "placementType": "fingers outside",
         "dynamicSizeType": "equal notch and finger size",
         "jointType": "box",

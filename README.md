@@ -2,7 +2,7 @@
 
 **Version:** 1.4.0 &nbsp;·&nbsp; **Author:** Ed Johnson (Making With An EdJ) &nbsp;·&nbsp; [Changelog](CHANGELOG.md)
 
-A Fusion add-in that generates finger (box) joints and through dovetail joints from overlapping 3D bodies, in a persistent modeless palette with live non-destructive preview and preset management.
+A Fusion add-in that generates finger (box) joints and dovetail joints (through and coplanar) from overlapping 3D bodies, in a persistent modeless palette with live non-destructive preview and preset management.
 
 This is a live palette remix of the original [Finger Joints](https://github.com/FlorianPommerening/FingerJoints) add-in by Florian Pommerening — it takes his core mathematical engine and wraps it in a modern HTML palette with the workflow enhancements below. Full credit for the underlying joint math and terminology (Dynamic Sizing, Placement Types, etc.) goes to his original project.
 
@@ -13,7 +13,7 @@ This is a live palette remix of the original [Finger Joints](https://github.com/
 ## Features
 
 * **Persistent Live UI:** The palette docks on the side of your screen. Tweak parameters, change settings, and see results without a modal dialog blocking your view or closing after every tweak.
-* **Box and Dovetail joints:** Generate straight-sided finger joints or angled through dovetails from the same workflow. See the [Changelog](CHANGELOG.md#v130--2026-07-29) for the dovetail manufacturing constraints (3D-print or 5-axis only — not laser/CNC-cuttable).
+* **Box and Dovetail joints:** Generate straight-sided finger joints, angled Through Dovetails, or Coplanar Dovetails from the same workflow. Through Dovetail tapers across the panel thickness (3D-print or 5-axis only — not laser/CNC-cuttable; see the [Changelog](CHANGELOG.md#v130--2026-07-29)). Coplanar Dovetail tapers across the splice-reach depth instead, keeping the cut a constant shape through the panel thickness — laser/CNC-cuttable, and intended for the same inline-splice use case (joining two coplanar panels end-to-end).
 * **Multi-Body Selection:** Select multiple "First Bodies" (e.g., two opposite walls of a box) and multiple "Second Bodies" (the adjoining walls) at once. The add-in calculates the intersections and generates joints for all of them together.
 * **Non-Destructive Live Preview:** Instead of computing heavy timeline features, FingerJointsLive renders temporary "ghost" bodies on the canvas. This keeps your timeline clean and makes tweaking dimensions fast. Once you're happy, hit "Generate Joints" to commit the changes to the timeline in a single undo step.
 * **Close Butt Joint (Loop):** Bodies don't need to already overlap. Pick an edge, corner, or face on the panel you want to extend, then pick the target face — the add-in creates a real extend/join feature closing the gap, and loops so you can close every joint on a model without re-clicking a button each time.
@@ -53,75 +53,19 @@ Download the zip file using the green `Code` button above or simply click this l
 
 ## Usage
 
-*Screenshots of the current palette UI are still pending — see the placeholders below. Everything else in this section reflects the current UI.*
+*Screenshots of the current palette UI are still pending — see the placeholder below.*
 
 The palette has three tabs: **Joints** (create finger/dovetail joints and close butt joints), **Dogbone** (post-process corner relief for CNC routing), and **Themes** (palette appearance). It docks to either side of the Fusion window or floats freely, and remembers its size, position, and docking state between sessions.
 
 > 🖼️ *Screenshot — Hero shot: full palette open beside a real box-joint model. (pending)*
 
-### Joints tab
+**Joints tab:** Select the bodies that get fingers and the bodies that get notches, pick a joint type (box, through dovetail, or coplanar dovetail), placement, sizing, and kerf compensation, then hit **Generate Joints** — a live, color-coded ghost preview (blue for the 1st Body's material, orange for the 2nd Body's) updates as you type. **Close Butt Joint** extends non-overlapping panels into each other first, for the case where nothing overlaps yet. Presets let you save and reload favorite configurations.
 
-**Selections:** Click **Select 1st Body/Bodies** and pick one or more bodies to receive fingers, then **Select 2nd Body/Bodies** for the bodies that receive notches. **Select Direction** picks the edge that defines the joint's orientation — leave it on Auto and the add-in uses the longest overlapping edge. **Help** opens a quick reference for these three; **Clear Picks** resets all three selections.
+**Dogbone tab:** A post-process that adds round relief cuts at interior corners so a CNC router bit can fully clear a square inside corner — not needed for laser/waterjet cutting. Pick bodies, faces, or exact edges, choose a relief style, and apply.
 
-**Preview / Generate Joints:** **Preview** renders temporary "ghost" bodies on the canvas — no timeline features are created, so it's fast to iterate on settings. **Generate Joints** commits the joints as real timeline features, grouped into a single `CFG_Joint_XXX` timeline group and a single Undo step no matter how many body pairs are involved.
+**Themes tab:** Switch between built-in themes or import your own; purely cosmetic, never touches your model.
 
-> 🖼️ *Screenshot — Live Preview vs. Generate: ghost-body preview next to the committed result. (pending)*
-
-**Presets:** The dropdown loads a saved preset. **Save** stores the current settings under a new name; **Upd** overwrites the currently-selected preset with the current settings; **X** deletes the selected preset; **Clear** resets all settings to factory defaults (saved presets and your current body/direction selections are unaffected).
-
-> 🖼️ *Screenshot — Presets: save / update / load flow. (pending)*
-
-**Configuration:**
-* **Joint Type** — *Box / Finger* for straight-sided fingers, or *Through Dovetail* for angled pins/tails.
-  * **Dovetail Angle** (Dovetail only) — taper angle of the pins/tails, typically 7–14°.
-  * **Reverse Taper** (Dovetail only) — flips which face of the joint ends up wide vs. narrow. A closed corner and an inline splice (joining two coplanar panels end-to-end) typically need opposite settings for the teeth to interlock; if a dovetail doesn't assemble, try flipping this. See the [Changelog](CHANGELOG.md#v130--2026-07-29) for the dovetail manufacturing constraints (3D-print or 5-axis only — not laser/CNC-cuttable).
-
-    > 🖼️ *Screenshot — Joint Type: Box vs. Dovetail side-by-side. (pending)*
-    > 🖼️ *Screenshot — Reverse Taper: same dovetail joint, both toggle states. (pending)*
-
-* **Placement** — *Fingers outside* / *Notches outside* place a finger or notch at both ends of the row; *Start w/ finger* / *Start w/ notch* place a finger (or notch) at one end and the opposite at the other.
-* **Size Mode** — *Equal Size* splits the overlap into equal fingers and notches; *Fixed Notch* / *Fixed Finger* holds one size fixed and calculates the other.
-* **Fixed Number of Fingers** — when checked, fixes the finger count (**Number of Fingers**) and calculates sizes from it. When unchecked, a size is fixed instead (**Notch Size** / **Finger Size**, or **Minimal Notch Size** / **Minimal Finger Size** as a dynamic minimum) and the add-in fits as many fingers as will cleanly fit along the joint.
-* **Gap Between Fingers (Kerf Comp.)** — clearance (positive) or interference (negative) between fingers and notches. Doubles as laser kerf compensation: a negative value oversizes the joint before cutting so the kerf brings the fit back to snug. Start near your laser's kerf width and fine-tune from a test cut.
-* **Gap To Part (Exp.)** — experimental standoff/air-gap between the joint and the surrounding parts (e.g. so a pin stands proud), unrelated to kerf compensation. Negative values aren't supported.
-
-For the original add-in's full illustrated walkthrough of the Placement/Size Mode/Gap concepts above (the underlying math is unchanged from Florian's original), see [Florian Pommerening's usage guide](https://github.com/FlorianPommerening/FingerJoints#usage).
-
-**Close Butt Joint:** Bodies don't need to already overlap. Click **Extend Butt Joints (Loop)**, pick an edge/corner/face on the panel to extend, then pick the target face — the add-in creates a real extend/join feature closing the gap, then loops (prompting for the next source, then target) so you can close every joint on a model without re-clicking the button. Click Cancel on either prompt to stop.
-
-> 🖼️ *Screenshot — Close Butt Joint loop: select-source → select-target → extended-result sequence. (pending)*
-
-### Dogbone tab
-
-A post-process operation applied to an already-cut body's real geometry — adds round relief cuts at interior corners so a CNC router bit (which is round) can fully clear a square inside corner. Not needed for laser or waterjet cutting, which cut a true sharp corner already.
-
-**Selection Mode** determines how corners are chosen:
-* **Body** — auto-detects every qualifying interior corner on each selected body, using the body's own bounding box to guess the router's plunge axis.
-* **Face** — same auto-detection, but the plunge axis comes from a picked face's normal instead. Use this when a body isn't axis-aligned and Body mode guesses the wrong axis.
-* **Edge** — manually pick exactly which corner edges to relieve, bypassing auto-detection entirely.
-
-> 🖼️ *Screenshot — Dogbone selection modes: Body, Face, Edge (one shot each). (pending)*
-
-Depending on the mode, **Select Body/Bodies to Relieve**, **Select Face(s) to Relieve**, or **Select Corner Edges** appears — all three accept multiple picks, and picks can span more than one body. In Edge mode, watch for convex corners sitting right next to the true concave corner (easy to mix up at a finger-joint notch mouth, especially at zero kerf comp where edges can be coincident) — a picked edge that isn't a genuine concave corner is skipped automatically.
-
-**Preview / Apply Dog Bones** work like the Joints tab's Preview/Generate: Preview renders temporary geometry, Apply commits a base+cut feature pair per affected body. The status line below the buttons reports picks that didn't produce any relief (an invalid edge pick, or a body/face with nothing to relieve) without interrupting you — a genuine geometry failure during Apply still shows a dialog.
-
-> 🖼️ *Screenshot — Dogbone status line: example of the "some picks weren't valid" feedback. (pending)*
-
-**Configuration:**
-* **Style** — *Corner*: diagonal relief centered on the corner's bisector (most common). *Minimal Corner*: same bisector, but leaves a bit of material short of the corner (**Interference**) for a tighter, less visually obvious relief. *Long Side* / *Short Side*: offset against a single adjacent wall, bulging asymmetrically toward whichever wall is longer or shorter at that specific corner.
-* **Router Bit Diameter** — diameter of the round bit you'll cut this relief with; the relief radius is derived automatically.
-* **Clearance** — safety margin pushing each relief circle slightly past the exact corner, so the cut unambiguously clears it.
-* **Interference** (Minimal Corner only) — how far short of the corner material is deliberately left, the opposite sign of Clearance.
-* **Angle Tolerance** (Body/Face mode only) — how close to 90° two adjacent faces must be to qualify as a corner. Edge mode ignores this and relieves exactly whichever corners you pick.
-
-> 🖼️ *Screenshot — Dogbone styles comparison: Corner / Minimal Corner / Long Side / Short Side on the same corner. (pending)*
-
-### Themes tab
-
-The theme dropdown in the palette header applies a theme immediately. The **Theme Manager** section lets you adjust **Font Family** and **Base Font Size** for the active theme, **import/export** a theme as `style.css` (for use with a separate Theme Designer tool) or `.json`, **remove** a selected custom (imported) theme, or **factory reset** the theme cache back to the built-in set.
-
-> 🖼️ *Screenshot — Themes tab: theme picker plus 2–3 built-in themes applied. (pending)*
+For the full field-by-field reference — every setting, troubleshooting tips, data persistence, and known limitations, with a complete set of illustrated screenshots — see the **[User Guide](USER_GUIDE.md)**.
 
 ### Other Uses
 
