@@ -360,6 +360,21 @@ function setDogboneStatus(message) {
     }
 }
 
+// Same non-blocking pattern as setDogboneStatus, for the Joints tab - e.g. a dovetail
+// angle/size combination that can't currently produce a valid cut. Live preview hits
+// this constantly while the user is mid-adjustment, so it must not require a click to
+// dismiss the way a messageBox does.
+function setJointsStatus(message) {
+    const el = document.getElementById('jointsStatus');
+    if (message) {
+        el.textContent = message;
+        el.className = 'status-box info';
+    } else {
+        el.textContent = '';
+        el.className = 'status-box';
+    }
+}
+
 function applyDogbones() {
     adsk.fusionSendData('notification', JSON.stringify({ action: 'dogbone_apply', payload: getDogbonePayload() }));
 }
@@ -467,6 +482,9 @@ window.fusionJavaScriptHandler = {
             } else if (action === 'dogbone_status') {
                 const info = JSON.parse(data);
                 setDogboneStatus(info.message || '');
+            } else if (action === 'joints_status') {
+                const info = JSON.parse(data);
+                setJointsStatus(info.message || '');
             } else if (action === 'file_imported') {
                 const payload = JSON.parse(data);
                 if (payload.file_type === 'css') {

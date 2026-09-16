@@ -2,6 +2,12 @@
 
 All notable changes to FingerJointsLive are documented here. See [README.md](README.md) for current usage and installation instructions.
 
+## v1.6.0 — 2026-09-16
+
+* **Coplanar Dovetail joint type:** a new, laser/CNC-cuttable alternative to Through Dovetail for the same inline-splice use case (joining two coplanar panels end-to-end). Through Dovetail tapers across the panel's thickness, which needs 3D printing or a 5-axis setup; Coplanar Dovetail tapers across the splice-reach depth instead, so the cut stays a constant shape through the panel's thickness — a straight-through cut any 2.5-axis laser or 3-axis CNC can produce, with the classic hand-cut dovetail look on the panel's wide face. Not a general corner-joint replacement — it's specifically for the inline-splice case.
+* **Joints tab status line:** "Could not compute some joints" (e.g. while adjusting a dovetail angle/size combination toward a workable one) now shows as a quiet status line under Preview/Generate instead of a dialog that needed a click to dismiss on every live-preview update. Generating with invalid settings still shows a dialog, since that's a deliberate action.
+* Known cosmetic limitation: with a large taper depth (mainly Coplanar Dovetail, given its typically much deeper splice-reach taper vs. Through Dovetail's thin thickness taper), "Equal Size" teeth are exactly equal where the joint's two panels actually meet, but a tooth in the middle of the row can look narrower than one at the row's edge deeper into the cut — a real geometric property of the taper, not a sizing bug. See CLAUDE.md if revisiting.
+
 ## v1.5.0 — 2026-09-11
 
 * **Fixed: dovetail taper axis on coplanar/inline splices.** Through-dovetail generation picked the taper axis by comparing raw overlap dimensions ("smaller wins"), which only holds for corner joints — an inline splice joining two panels on the same plane could pick panel thickness instead of the actual splice width. The axis is now chosen with a geometric test (is this axis flush with the original body's own bounds?) instead of a magnitude comparison, matching the approach already used for Dog Bone plunge-axis detection.

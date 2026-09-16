@@ -1,6 +1,6 @@
 # Finger Joints Live
 
-**Version:** 1.5.0 &nbsp;·&nbsp; **Author:** Ed Johnson (Making With An EdJ) &nbsp;·&nbsp; [Changelog](CHANGELOG.md)
+**Version:** 1.6.0 &nbsp;·&nbsp; **Author:** Ed Johnson (Making With An EdJ) &nbsp;·&nbsp; [Changelog](CHANGELOG.md)
 
 A Fusion add-in that generates finger (box) joints and dovetail joints (through and coplanar) from overlapping 3D bodies, in a persistent modeless palette with live non-destructive preview and preset management.
 

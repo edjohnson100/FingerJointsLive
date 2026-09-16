@@ -348,6 +348,17 @@ def apply_dogbone_payload_settings(inputs, payload):
     if payload.get('angleTolerance'): inputs.angleTolerance.expression = payload.get('angleTolerance')
 
 
+def _send_joints_status(message):
+    """Updates the Joints tab's persistent, non-blocking status line (below the
+    Preview/Generate buttons), mirroring _send_dogbone_status - gentle feedback for a
+    routine "current parameters can't produce a valid cut" situation (e.g. mid-adjustment
+    on a dovetail angle/size combination) that shouldn't interrupt the user the way a
+    messageBox would. Pass '' to hide it."""
+    palette = ui.palettes.itemById(palette_id)
+    if palette:
+        palette.sendInfoToHTML('joints_status', json.dumps({'message': message}))
+
+
 def preview_joints(payload):
     """Calculates tool bodies and displays them as temporary orange/blue preview graphics,
     per-body (body0 vs. body1), including a faint wash over the full selected bodies so
@@ -461,9 +472,13 @@ def preview_joints(payload):
     app.activeViewport.refresh()
 
     if not success:
-        ui.messageBox("Could not compute some joints. Double-check dimensions and overlaps.")
+        # Non-blocking status line, not a messageBox - this runs on every 500ms debounce
+        # tick, and a modal dialog would force a click to dismiss for as long as the
+        # current parameters (e.g. a dovetail angle/size combination) stay infeasible.
+        _send_joints_status("Could not compute some joints - double-check dimensions and overlaps.")
         return False
 
+    _send_joints_status('')
     return True
 
 
@@ -1116,6 +1131,7 @@ class MyHTMLEventHandler(adsk.core.HTMLEventHandler):
                 active_selections['body1'] = []
                 active_selections['direction'] = None
                 clear_preview()
+                _send_joints_status('')
 
                 palette = ui.palettes.itemById(palette_id)
                 if palette:
