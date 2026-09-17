@@ -22,6 +22,8 @@ import traceback
 import os
 import json
 import time
+import re
+import urllib.request
 
 from . import options
 from . import geometry
@@ -1398,6 +1400,108 @@ class MyCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
         except: pass
 
 
+# Dev-checkout convenience: Ed switches between a Mac and Windows checkout of this same repo
+# and has more than once forgotten to push/pull before switching machines. UPDATE_CHECK_REPO
+# is the fallback used only if origin's URL can't be parsed out of .git/config (should never
+# happen in practice, but cheap to have a sane default rather than erroring out).
+UPDATE_CHECK_TIMEOUT_SECONDS = 3
+UPDATE_CHECK_REPO = 'edjohnson100/FingerJointsLive'
+
+
+def _update_check_git_dir():
+    """None for a zip/store install (no .git alongside the add-in) - the check is a no-op
+    there, since only Ed's own dev checkouts can drift from GitHub in the first place."""
+    addin_dir = os.path.dirname(os.path.realpath(__file__))
+    git_dir = os.path.join(addin_dir, '.git')
+    return git_dir if os.path.isdir(git_dir) else None
+
+
+def _read_local_git_head(git_dir):
+    """Returns (sha, branch) read straight out of .git's own files - no dependency on the git
+    executable being on PATH, since this only needs to run once at add-in startup."""
+    with open(os.path.join(git_dir, 'HEAD'), 'r', encoding='utf-8') as f:
+        head = f.read().strip()
+    if not head.startswith('ref: '):
+        return head, None  # Detached HEAD - head is the sha itself.
+    ref = head[len('ref: '):]
+    branch = ref.rsplit('/', 1)[-1]
+    ref_path = os.path.join(git_dir, ref)
+    if os.path.isfile(ref_path):
+        with open(ref_path, 'r', encoding='utf-8') as f:
+            return f.read().strip(), branch
+    # Loose ref not present - repo has been gc'd/packed, so look in packed-refs instead.
+    packed_path = os.path.join(git_dir, 'packed-refs')
+    if os.path.isfile(packed_path):
+        with open(packed_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip().endswith(' ' + ref):
+                    return line.split()[0], branch
+    return None, branch
+
+
+def _github_repo_slug(git_dir):
+    try:
+        with open(os.path.join(git_dir, 'config'), 'r', encoding='utf-8') as f:
+            config = f.read()
+    except OSError:
+        return UPDATE_CHECK_REPO
+    origin_match = re.search(r'\[remote "origin"\][^\[]*?url\s*=\s*(\S+)', config)
+    if not origin_match:
+        return UPDATE_CHECK_REPO
+    slug_match = re.search(r'github\.com[:/]([^/]+/[^/.]+?)(\.git)?$', origin_match.group(1))
+    return slug_match.group(1) if slug_match else UPDATE_CHECK_REPO
+
+
+def check_for_repo_updates():
+    """Compares this machine's checked-out commit against GitHub's branch tip and flags any
+    drift - behind (forgot to pull), ahead (forgot to push/PR), or diverged (both). Always logs
+    a one-line result to the Text Commands palette via app.log so the status is visible either
+    way; only pops a messageBox when there's actually something to reconcile, so a normal
+    up-to-date launch stays silent apart from that log line. Wrapped so any failure (offline,
+    GitHub API hiccup, unexpected repo state) degrades to a log line, never an interruption."""
+    git_dir = _update_check_git_dir()
+    if not git_dir:
+        return
+    try:
+        local_sha, branch = _read_local_git_head(git_dir)
+        if not local_sha:
+            app.log('FingerJointsLive: could not determine local git commit; skipping update check.')
+            return
+        branch = branch or 'main'
+        repo_slug = _github_repo_slug(git_dir)
+        url = f'https://api.github.com/repos/{repo_slug}/compare/{branch}...{local_sha}'
+        request = urllib.request.Request(url, headers={
+            'User-Agent': 'FingerJointsLive-UpdateCheck',
+            'Accept': 'application/vnd.github+json',
+        })
+        with urllib.request.urlopen(request, timeout=UPDATE_CHECK_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        status = data.get('status')
+        ahead_by = data.get('ahead_by', 0)
+        behind_by = data.get('behind_by', 0)
+        short_sha = local_sha[:7]
+
+        if status == 'identical':
+            app.log(f'FingerJointsLive: local checkout is up to date with {repo_slug}@{branch} ({short_sha}).')
+            return
+        elif status == 'behind':
+            message = (f'FingerJointsLive: local checkout is {behind_by} commit(s) behind '
+                       f'{repo_slug}@{branch} - pull the latest before making changes.')
+        elif status == 'ahead':
+            message = (f'FingerJointsLive: local checkout is {ahead_by} commit(s) ahead of '
+                       f'{repo_slug}@{branch} - push/open a PR before switching machines.')
+        elif status == 'diverged':
+            message = (f'FingerJointsLive: local checkout has diverged from {repo_slug}@{branch} '
+                       f'({ahead_by} ahead, {behind_by} behind) - reconcile before continuing.')
+        else:
+            message = f'FingerJointsLive: unexpected git comparison status "{status}" vs {repo_slug}@{branch}.'
+
+        app.log(message)
+        ui.messageBox(message)
+    except Exception as e:
+        app.log(f'FingerJointsLive: update check failed ({e}).')
+
+
 def run(context):
     global ui, app
     try:
@@ -1443,6 +1547,8 @@ def run(context):
         panel = ui.allToolbarPanels.itemById('SolidModifyPanel')
         ctrl = panel.controls.addCommand(cmdDef)
         ctrl.isPromoted = True
+
+        check_for_repo_updates()
     except:
         pass
 
